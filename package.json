@@ -2,7 +2,9 @@
   "name": "ai-sdk-deep-agent",
   "version": "0.1.0",
   "description": "Deep Agents implementation using Vercel AI SDK - build controllable AI agents with planning, filesystem, and subagent capabilities",
-  "module": "src/index.ts",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
   "type": "module",
   "bin": {
     "deep-agent": "./src/cli/index.ts"
@@ -16,11 +18,25 @@
       "import": "./src/cli/index.ts"
     }
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run typecheck",
     "cli": "bun src/cli/index.ts",
     "cli-ink": "bun src/cli-ink/index.tsx"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrispangg/ai-sdk-deepagent.git"
+  },
+  "homepage": "https://github.com/chrispangg/ai-sdk-deepagent#readme",
+  "bugs": {
+    "url": "https://github.com/chrispangg/ai-sdk-deepagent/issues"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.0",
@@ -49,7 +65,14 @@
     "deep-agents",
     "vercel-ai-sdk",
     "llm",
-    "typescript"
+    "typescript",
+    "bun",
+    "anthropic",
+    "openai",
+    "ai-sdk"
   ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
   "license": "MIT"
 }

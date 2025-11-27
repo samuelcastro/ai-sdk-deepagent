@@ -1,0 +1,27 @@
+# Development and configuration files
+.cursor/
+.env*
+.DS_Store
+CLAUDE.md
+
+# Examples (users can see them on GitHub)
+examples/
+
+# Git files
+.git/
+.gitignore
+
+# IDE files
+.idea/
+
+# Bun-specific (not needed in published package)
+bun.lock
+
+# Testing and coverage
+coverage/
+*.lcov
+
+# Build artifacts that shouldn't exist but just in case
+out/
+dist/
+*.tgz

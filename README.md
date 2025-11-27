@@ -1,5 +1,10 @@
 # AI SDK Deep Agent
 
+[![npm version](https://badge.fury.io/js/ai-sdk-deep-agent.svg)](https://www.npmjs.com/package/ai-sdk-deep-agent)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Note:** This package requires [Bun](https://bun.sh) runtime. It uses Bun-specific features and TypeScript imports.
+
 A TypeScript library for building controllable AI agents using [Vercel AI SDK](https://ai-sdk.dev/). This is a reimplementation of [deepagentsjs](https://github.com/langchain-ai/deepagentsjs) without any LangChain/LangGraph dependencies.
 
 ## What are Deep Agents?
@@ -17,9 +22,20 @@ Deep Agents address these limitations through four core architectural components
 
 ## Installation
 
+This package requires Bun runtime:
+
 ```bash
+# Install Bun if you haven't already
+curl -fsSL https://bun.sh/install | bash
+
+# Install the package
 bun add ai-sdk-deep-agent
+
+# Or install globally for CLI usage
+bun add -g ai-sdk-deep-agent
 ```
+
+**Why Bun?** This package publishes TypeScript source directly and uses Bun-specific optimizations for better performance.
 
 ## Quick Start
 
@@ -366,14 +382,24 @@ for await (const event of agent.streamWithEvents({
 
 ## CLI
 
-The package includes an interactive CLI built with [Ink](https://github.com/vadimdemedes/ink):
+The interactive CLI is built with [Ink](https://github.com/vadimdemedes/ink) and requires Bun:
 
 ```bash
-# Run the CLI
-bun run cli-ink
+# If installed globally
+deep-agent
+
+# Or use bunx to run without installing
+bunx ai-sdk-deep-agent
+
+# Or run locally after installing
+bun add ai-sdk-deep-agent
+deep-agent
+
+# During development, run from source
+bun run cli
 
 # With options
-bun run cli-ink --model anthropic/claude-haiku-4-5-20251001 --work-dir ./my-project
+deep-agent --model anthropic/claude-haiku-4-5-20251001 --work-dir ./my-project
 ```
 
 ### CLI Commands
