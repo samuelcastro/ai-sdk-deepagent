@@ -115,6 +115,78 @@ export function FileEdited({
 }
 
 /**
+ * Compact file read notification.
+ */
+interface FileReadProps {
+  path: string;
+  lines: number;
+}
+
+export function FileRead({ path, lines }: FileReadProps): React.ReactElement {
+  return (
+    <Box>
+      <Text color={colors.info}>📖 Read: </Text>
+      <Text color={colors.file}>{path}</Text>
+      <Text dimColor> ({lines} lines)</Text>
+    </Box>
+  );
+}
+
+/**
+ * Compact ls result notification.
+ */
+interface LsResultProps {
+  path: string;
+  count: number;
+}
+
+export function LsResult({ path, count }: LsResultProps): React.ReactElement {
+  return (
+    <Box>
+      <Text color={colors.info}>📂 Listed: </Text>
+      <Text color={colors.file}>{path}</Text>
+      <Text dimColor> ({count} item{count === 1 ? "" : "s"})</Text>
+    </Box>
+  );
+}
+
+/**
+ * Compact glob result notification.
+ */
+interface GlobResultProps {
+  pattern: string;
+  count: number;
+}
+
+export function GlobResult({ pattern, count }: GlobResultProps): React.ReactElement {
+  return (
+    <Box>
+      <Text color={colors.info}>🔍 Glob: </Text>
+      <Text color={colors.tool}>{pattern}</Text>
+      <Text dimColor> ({count} match{count === 1 ? "" : "es"})</Text>
+    </Box>
+  );
+}
+
+/**
+ * Compact grep result notification.
+ */
+interface GrepResultProps {
+  pattern: string;
+  count: number;
+}
+
+export function GrepResult({ pattern, count }: GrepResultProps): React.ReactElement {
+  return (
+    <Box>
+      <Text color={colors.info}>🔎 Grep: </Text>
+      <Text color={colors.tool}>{pattern}</Text>
+      <Text dimColor> ({count} match{count === 1 ? "" : "es"})</Text>
+    </Box>
+  );
+}
+
+/**
  * File list panel for /files command.
  */
 interface FileListProps {

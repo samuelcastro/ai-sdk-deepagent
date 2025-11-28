@@ -25,6 +25,10 @@ import {
   FilePreview,
   FileWritten,
   FileEdited,
+  FileRead,
+  LsResult,
+  GlobResult,
+  GrepResult,
   FileList,
   ToolCall,
   StepIndicator,
@@ -34,6 +38,9 @@ import {
   SubagentStart,
   SubagentFinish,
   StatusBar,
+  ModelSelectionPanel,
+  ApiKeyInputPanel,
+  ApiKeyStatus,
   type MessageData,
 } from "./components/index.js";
 import { parseCommand, colors, SLASH_COMMANDS } from "./theme.js";
@@ -175,7 +182,7 @@ interface AppProps {
   backend: FilesystemBackend;
 }
 
-type PanelView = "none" | "help" | "todos" | "files" | "file-content" | "apikey" | "features" | "tokens";
+type PanelView = "none" | "help" | "todos" | "files" | "file-content" | "apikey" | "apikey-input" | "features" | "tokens" | "models";
 
 interface PanelState {
   view: PanelView;
@@ -246,34 +253,12 @@ function App({ options, backend }: AppProps): React.ReactElement {
         return;
       }
 
-      // Add user message
-      const userMessage: MessageData = {
-        id: `msg-${Date.now()}`,
-        role: "user",
-        content: trimmed,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
-
       // Clear any panel
       setPanel({ view: "none" });
 
-      // Send to agent and get the final text and tool calls
-      const result = await agent.sendPrompt(trimmed);
-
-      // Add assistant message when done (with tool calls attached)
-      if (result.text) {
-        const assistantMessage: MessageData = {
-          id: `msg-${Date.now()}-assistant`,
-          role: "assistant",
-          content: result.text,
-          timestamp: new Date(),
-          toolCalls: result.toolCalls.length > 0 ? result.toolCalls : undefined,
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-        // Clear the streaming text since it's now in messages
-        agent.clearStreamingText();
-      }
+      // Send to agent - user message is added to events by useAgent hook
+      // Events serve as the conversation history with proper formatting
+      await agent.sendPrompt(trimmed);
     },
     [showWelcome, agent]
   );
@@ -321,25 +306,16 @@ function App({ options, backend }: AppProps): React.ReactElement {
       case "apikey":
       case "key":
       case "api":
-        if (!args) {
-          setPanel({ view: "apikey" });
-          return;
-        }
-
-        const keyParts = args.split(/\s+/);
-        const provider = keyParts[0]?.toLowerCase();
-        const apiKey = keyParts.slice(1).join(" ");
-
-        if (provider === "anthropic" && apiKey) {
-          process.env.ANTHROPIC_API_KEY = apiKey;
-        } else if (provider === "openai" && apiKey) {
-          process.env.OPENAI_API_KEY = apiKey;
-        }
+        // Always show interactive API key input panel
+        setPanel({ view: "apikey-input" });
         break;
 
       case "model":
         if (args) {
           agent.setModel(args.trim());
+        } else {
+          // Show available models if no args provided
+          setPanel({ view: "models" });
         }
         break;
 
@@ -420,6 +396,10 @@ function App({ options, backend }: AppProps): React.ReactElement {
   };
 
   const isGenerating = agent.status !== "idle" && agent.status !== "done" && agent.status !== "error";
+  
+  // Disable input when in interactive panels that capture keyboard input
+  const isInteractivePanel = panel.view === "apikey-input" || panel.view === "models";
+  const isInputDisabled = isGenerating || isInteractivePanel;
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -431,11 +411,6 @@ function App({ options, backend }: AppProps): React.ReactElement {
         </>
       )}
 
-      {/* Chat history (static - doesn't re-render) */}
-      <Static items={messages}>
-        {(message) => <Message key={message.id} message={message} />}
-      </Static>
-
       {/* Panel views */}
       {panel.view === "help" && <SlashMenuPanel />}
       {panel.view === "todos" && <TodoList todos={agent.state.todos} />}
@@ -444,26 +419,57 @@ function App({ options, backend }: AppProps): React.ReactElement {
         <FilePreview path={panel.filePath} content={panel.fileContent} />
       )}
       {panel.view === "apikey" && <ApiKeyStatus />}
+      {panel.view === "apikey-input" && (
+        <ApiKeyInputPanel
+          onKeySaved={() => {
+            // Key saved, will auto-close
+          }}
+          onClose={() => setPanel({ view: "none" })}
+        />
+      )}
       {panel.view === "features" && <FeaturesPanel features={agent.features} options={options} />}
       {panel.view === "tokens" && <TokensPanel tokenCount={panel.tokenCount || 0} messageCount={agent.messages.length} />}
+      {panel.view === "models" && (
+        <ModelSelectionPanel
+          currentModel={agent.currentModel}
+          onModelSelect={(modelId) => {
+            agent.setModel(modelId);
+          }}
+          onClose={() => setPanel({ view: "none" })}
+        />
+      )}
 
-      {/* Current generation */}
-      {isGenerating && (
+      {/* Agent events in chronological order (includes text-segments) */}
+      {/* Always show events - they persist after generation completes */}
+      {agent.events.length > 0 && (
         <Box flexDirection="column">
-          {/* Agent events */}
           {agent.events.map((event) => (
             <EventRenderer key={event.id} event={event} />
           ))}
+        </Box>
+      )}
 
-          {/* Thinking indicator */}
-          {agent.status === "thinking" && <ThinkingIndicator />}
-
-          {/* Streaming text */}
+      {/* Current generation indicators */}
+      {isGenerating && (
+        <Box flexDirection="column">
+          {/* Currently streaming text (not yet flushed to a text-segment) */}
           {agent.streamingText && (
-            <StreamingMessage
-              content={agent.streamingText}
-              isStreaming={agent.status === "streaming"}
-            />
+            <Box marginY={1}>
+              <Box>
+                <Text color={colors.success}>{"● "}</Text>
+                <Text>
+                  {agent.streamingText}
+                  <Text color={colors.muted}>▌</Text>
+                </Text>
+              </Box>
+            </Box>
+          )}
+
+          {/* Loading indicator when thinking or executing tools */}
+          {(agent.status === "thinking" || agent.status === "tool-call") && !agent.streamingText && (
+            <Box marginY={1}>
+              <ThinkingIndicator />
+            </Box>
           )}
         </Box>
       )}
@@ -471,10 +477,12 @@ function App({ options, backend }: AppProps): React.ReactElement {
       {/* Error display */}
       {agent.error && <ErrorDisplay error={agent.error} />}
 
-      {/* Input */}
-      <Box marginTop={1}>
-        <Input onSubmit={handleSubmit} disabled={isGenerating} />
-      </Box>
+      {/* Input - hidden when interactive panels are active */}
+      {!isInteractivePanel && (
+        <Box marginTop={1}>
+          <Input onSubmit={handleSubmit} disabled={isGenerating} />
+        </Box>
+      )}
 
       {/* Compact status bar at bottom */}
       <StatusBar
@@ -495,21 +503,62 @@ interface EventRendererProps {
   event: AgentEventLog;
 }
 
+// Tools that have their own specific events - don't show generic tool-call for these
+const TOOLS_WITH_SPECIFIC_EVENTS = new Set([
+  "read_file",
+  "ls", 
+  "glob",
+  "grep",
+  "write_file",
+  "edit_file",
+  "write_todos",
+]);
+
 function EventRenderer({ event }: EventRendererProps): React.ReactElement | null {
   const e = event.event;
 
   switch (e.type) {
+    case "user-message":
+      // Render user message in history
+      return (
+        <Box marginBottom={1}>
+          <Text color={colors.muted} bold>{"> "}</Text>
+          <Text bold>{e.content}</Text>
+        </Box>
+      );
+
+    case "text-segment":
+      // Render accumulated text segment
+      if (!e.text.trim()) return null;
+      return (
+        <Box marginY={1}>
+          <Box>
+            <Text color={colors.success}>{"● "}</Text>
+            <Text>{e.text}</Text>
+          </Box>
+        </Box>
+      );
+
     case "step-start":
-      return <StepIndicator stepNumber={e.stepNumber} />;
+      return (
+        <Box marginTop={1}>
+          <Text color={colors.muted}>─── step {e.stepNumber} ───</Text>
+        </Box>
+      );
 
     case "tool-call":
+      // Skip generic tool-call display for tools that have specific events
+      if (TOOLS_WITH_SPECIFIC_EVENTS.has(e.toolName)) {
+        return null;
+      }
       return <ToolCall toolName={e.toolName} isExecuting={true} />;
 
     case "todos-changed":
       return (
         <Box>
+          <Text color={colors.info}>📋 Todos: </Text>
           <Text dimColor>
-            todos: {e.todos.filter((t) => t.status === "completed").length}/{e.todos.length}
+            {e.todos.filter((t) => t.status === "completed").length}/{e.todos.length} completed
           </Text>
         </Box>
       );
@@ -522,6 +571,18 @@ function EventRenderer({ event }: EventRendererProps): React.ReactElement | null
 
     case "file-edited":
       return <FileEdited path={e.path} occurrences={e.occurrences} />;
+
+    case "file-read":
+      return <FileRead path={e.path} lines={e.lines} />;
+
+    case "ls":
+      return <LsResult path={e.path} count={e.count} />;
+
+    case "glob":
+      return <GlobResult pattern={e.pattern} count={e.count} />;
+
+    case "grep":
+      return <GrepResult pattern={e.pattern} count={e.count} />;
 
     case "subagent-start":
       return <SubagentStart name={e.name} task={e.task} />;
@@ -682,69 +743,6 @@ function TokensPanel({ tokenCount, messageCount }: TokensPanelProps): React.Reac
           ⚠️ Consider enabling --summarize to manage context
         </Text>
       )}
-    </Box>
-  );
-}
-
-// ============================================================================
-// API Key Status Panel
-// ============================================================================
-
-function ApiKeyStatus(): React.ReactElement {
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
-
-  const maskKey = (key: string | undefined) => {
-    if (!key) return null;
-    return key.substring(0, 10) + "..." + key.substring(key.length - 4);
-  };
-
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle="single"
-      borderColor={colors.muted}
-      paddingX={2}
-      paddingY={1}
-      marginY={1}
-    >
-      <Text bold color={colors.info}>
-        🔑 API Keys
-      </Text>
-      <Box height={1} />
-      <Box>
-        {anthropicKey ? (
-          <>
-            <Text color={colors.success}>✓ </Text>
-            <Text>Anthropic: </Text>
-            <Text dimColor>{maskKey(anthropicKey)}</Text>
-          </>
-        ) : (
-          <>
-            <Text color={colors.warning}>✗ </Text>
-            <Text>Anthropic: </Text>
-            <Text dimColor>not set</Text>
-          </>
-        )}
-      </Box>
-      <Box>
-        {openaiKey ? (
-          <>
-            <Text color={colors.success}>✓ </Text>
-            <Text>OpenAI: </Text>
-            <Text dimColor>{maskKey(openaiKey)}</Text>
-          </>
-        ) : (
-          <>
-            <Text color={colors.warning}>✗ </Text>
-            <Text>OpenAI: </Text>
-            <Text dimColor>not set</Text>
-          </>
-        )}
-      </Box>
-      <Box height={1} />
-      <Text dimColor>Usage: /apikey anthropic {"<key>"}</Text>
-      <Text dimColor>       /apikey openai {"<key>"}</Text>
     </Box>
   );
 }

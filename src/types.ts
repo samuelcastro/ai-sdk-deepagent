@@ -640,6 +640,46 @@ export interface FileEditedEvent {
 }
 
 /**
+ * Event emitted when a file is read.
+ */
+export interface FileReadEvent {
+  type: "file-read";
+  path: string;
+  /** Number of lines read */
+  lines: number;
+}
+
+/**
+ * Event emitted when listing directory contents.
+ */
+export interface LsEvent {
+  type: "ls";
+  path: string;
+  /** Number of items found */
+  count: number;
+}
+
+/**
+ * Event emitted when searching with glob pattern.
+ */
+export interface GlobEvent {
+  type: "glob";
+  pattern: string;
+  /** Number of files found */
+  count: number;
+}
+
+/**
+ * Event emitted when searching with grep.
+ */
+export interface GrepEvent {
+  type: "grep";
+  pattern: string;
+  /** Number of matches found */
+  count: number;
+}
+
+/**
  * Event emitted when a subagent starts.
  */
 export interface SubagentStartEvent {
@@ -655,6 +695,23 @@ export interface SubagentFinishEvent {
   type: "subagent-finish";
   name: string;
   result: string;
+}
+
+/**
+ * Event emitted for a segment of text (used for CLI display).
+ * Text segments are flushed before tool events to maintain chronological order.
+ */
+export interface TextSegmentEvent {
+  type: "text-segment";
+  text: string;
+}
+
+/**
+ * Event emitted when a user sends a message (used for CLI history).
+ */
+export interface UserMessageEvent {
+  type: "user-message";
+  content: string;
 }
 
 /**
@@ -689,8 +746,14 @@ export type DeepAgentEvent =
   | FileWriteStartEvent
   | FileWrittenEvent
   | FileEditedEvent
+  | FileReadEvent
+  | LsEvent
+  | GlobEvent
+  | GrepEvent
   | SubagentStartEvent
   | SubagentFinishEvent
+  | TextSegmentEvent
+  | UserMessageEvent
   | DoneEvent
   | ErrorEvent;
 

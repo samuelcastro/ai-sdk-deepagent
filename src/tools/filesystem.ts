@@ -46,7 +46,8 @@ function getBackend(
  */
 function createLsTool(
   state: DeepAgentState,
-  backend: BackendProtocol | BackendFactory
+  backend: BackendProtocol | BackendFactory,
+  onEvent?: EventCallback
 ) {
   return tool({
     description: LS_TOOL_DESCRIPTION,
@@ -59,6 +60,15 @@ function createLsTool(
     execute: async ({ path }) => {
       const resolvedBackend = getBackend(backend, state);
       const infos = await resolvedBackend.lsInfo(path || "/");
+
+      // Emit ls event
+      if (onEvent) {
+        onEvent({
+          type: "ls",
+          path: path || "/",
+          count: infos.length,
+        });
+      }
 
       if (infos.length === 0) {
         return `No files found in ${path}`;
@@ -84,7 +94,8 @@ function createLsTool(
 function createReadFileTool(
   state: DeepAgentState,
   backend: BackendProtocol | BackendFactory,
-  evictionLimit?: number
+  evictionLimit?: number,
+  onEvent?: EventCallback
 ) {
   return tool({
     description: READ_FILE_TOOL_DESCRIPTION,
@@ -102,6 +113,16 @@ function createReadFileTool(
     execute: async ({ file_path, offset, limit }, { toolCallId }) => {
       const resolvedBackend = getBackend(backend, state);
       const content = await resolvedBackend.read(file_path, offset ?? 0, limit ?? 2000);
+      
+      // Emit file-read event
+      if (onEvent) {
+        const lineCount = content.split("\n").length;
+        onEvent({
+          type: "file-read",
+          path: file_path,
+          lines: lineCount,
+        });
+      }
       
       // Evict large results if limit is set
       if (evictionLimit && evictionLimit > 0) {
@@ -218,7 +239,8 @@ function createEditFileTool(
  */
 function createGlobTool(
   state: DeepAgentState,
-  backend: BackendProtocol | BackendFactory
+  backend: BackendProtocol | BackendFactory,
+  onEvent?: EventCallback
 ) {
   return tool({
     description: GLOB_TOOL_DESCRIPTION,
@@ -232,6 +254,15 @@ function createGlobTool(
     execute: async ({ pattern, path }) => {
       const resolvedBackend = getBackend(backend, state);
       const infos = await resolvedBackend.globInfo(pattern, path || "/");
+
+      // Emit glob event
+      if (onEvent) {
+        onEvent({
+          type: "glob",
+          pattern,
+          count: infos.length,
+        });
+      }
 
       if (infos.length === 0) {
         return `No files found matching pattern '${pattern}'`;
@@ -248,7 +279,8 @@ function createGlobTool(
 function createGrepTool(
   state: DeepAgentState,
   backend: BackendProtocol | BackendFactory,
-  evictionLimit?: number
+  evictionLimit?: number,
+  onEvent?: EventCallback
 ) {
   return tool({
     description: GREP_TOOL_DESCRIPTION,
@@ -273,7 +305,24 @@ function createGrepTool(
       );
 
       if (typeof result === "string") {
+        // Emit grep event even for string results (errors)
+        if (onEvent) {
+          onEvent({
+            type: "grep",
+            pattern,
+            count: 0,
+          });
+        }
         return result;
+      }
+
+      // Emit grep event
+      if (onEvent) {
+        onEvent({
+          type: "grep",
+          pattern,
+          count: result.length,
+        });
       }
 
       if (result.length === 0) {
@@ -354,11 +403,11 @@ export function createFilesystemTools(
     backend || ((s: DeepAgentState) => new StateBackend(s));
 
   return {
-    ls: createLsTool(state, resolvedBackend),
-    read_file: createReadFileTool(state, resolvedBackend, evictionLimit),
+    ls: createLsTool(state, resolvedBackend, eventCallback),
+    read_file: createReadFileTool(state, resolvedBackend, evictionLimit, eventCallback),
     write_file: createWriteFileTool(state, resolvedBackend, eventCallback),
     edit_file: createEditFileTool(state, resolvedBackend, eventCallback),
-    glob: createGlobTool(state, resolvedBackend),
-    grep: createGrepTool(state, resolvedBackend, evictionLimit),
+    glob: createGlobTool(state, resolvedBackend, eventCallback),
+    grep: createGrepTool(state, resolvedBackend, evictionLimit, eventCallback),
   };
 }

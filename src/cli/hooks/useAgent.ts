@@ -25,8 +25,8 @@ export type AgentStatus =
 
 export interface AgentEventLog {
   id: string;
-  type: DeepAgentEvent["type"];
-  event: DeepAgentEvent;
+  type: DeepAgentEvent["type"] | "text-segment";
+  event: DeepAgentEvent | { type: "text-segment"; text: string };
   timestamp: Date;
 }
 
@@ -68,6 +68,8 @@ export interface UseAgentReturn {
   clear: () => void;
   /** Clear only the streaming text (after saving to messages) */
   clearStreamingText: () => void;
+  /** Clear only the events (after saving to messages) */
+  clearEvents: () => void;
   /** Update model */
   setModel: (model: string) => void;
   /** Current model */
@@ -113,8 +115,10 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
   const [summarizationConfig, setSummarizationConfig] = useState(options.summarization);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Use a ref to track accumulated text during streaming
+  // Use a ref to track accumulated text during streaming (current segment, gets flushed)
   const accumulatedTextRef = useRef("");
+  // Use a ref to track total text for return value (never reset mid-generation)
+  const totalTextRef = useRef("");
   // Use a ref to track messages during streaming (to pass to agent)
   const messagesRef = useRef<ModelMessage[]>([]);
   // Use a ref to track tool calls during streaming
@@ -141,7 +145,7 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
     })
   );
 
-  const addEvent = useCallback((event: DeepAgentEvent) => {
+  const addEvent = useCallback((event: DeepAgentEvent | { type: "text-segment"; text: string }) => {
     setEvents((prev) => [
       ...prev,
       {
@@ -153,17 +157,33 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
     ]);
   }, []);
 
+  // Flush accumulated text as a text-segment event
+  const flushTextSegment = useCallback(() => {
+    if (accumulatedTextRef.current.trim()) {
+      addEvent({
+        type: "text-segment",
+        text: accumulatedTextRef.current,
+      });
+      accumulatedTextRef.current = "";
+      setStreamingText("");
+    }
+  }, [addEvent]);
+
   const sendPrompt = useCallback(
     async (prompt: string): Promise<{ text: string; toolCalls: ToolCallData[] }> => {
-      // Reset for new generation
+      // Reset for new generation - but keep events for history
       setStatus("thinking");
       setStreamingText("");
-      setEvents([]);
+      // Don't clear events - they serve as conversation history
       setToolCalls([]);
       setError(null);
       accumulatedTextRef.current = "";
+      totalTextRef.current = "";
       toolCallsRef.current = [];
       pendingToolCallsRef.current.clear();
+
+      // Add user message to events for history
+      addEvent({ type: "user-message", content: prompt });
 
       // Sync messages ref with current state
       messagesRef.current = messages;
@@ -183,16 +203,20 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
             case "text":
               setStatus("streaming");
               accumulatedTextRef.current += event.text;
+              totalTextRef.current += event.text;
               setStreamingText(accumulatedTextRef.current);
               break;
 
             case "step-start":
+              // Don't flush here - steps are just markers, text comes after tool results
               if (event.stepNumber > 1) {
                 addEvent(event);
               }
               break;
 
             case "tool-call":
+              // Flush text before tool call event
+              flushTextSegment();
               setStatus("tool-call");
               // Track the pending tool call
               const pendingToolCall: ToolCallData = {
@@ -218,19 +242,55 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
               break;
 
             case "todos-changed":
+              // Flush text before tool-related events
+              flushTextSegment();
+              setStatus("tool-call");
               setState((prev) => ({ ...prev, todos: event.todos }));
               addEvent(event);
               break;
 
             case "file-write-start":
+              // Flush text before tool-related events
+              flushTextSegment();
+              setStatus("tool-call");
               addEvent(event);
               break;
 
             case "file-written":
+              setStatus("tool-call");
               addEvent(event);
               break;
 
             case "file-edited":
+              setStatus("tool-call");
+              addEvent(event);
+              break;
+
+            case "file-read":
+              // Flush text before tool-related events
+              flushTextSegment();
+              setStatus("tool-call");
+              addEvent(event);
+              break;
+
+            case "ls":
+              // Flush text before tool-related events
+              flushTextSegment();
+              setStatus("tool-call");
+              addEvent(event);
+              break;
+
+            case "glob":
+              // Flush text before tool-related events
+              flushTextSegment();
+              setStatus("tool-call");
+              addEvent(event);
+              break;
+
+            case "grep":
+              // Flush text before tool-related events
+              flushTextSegment();
+              setStatus("tool-call");
               addEvent(event);
               break;
 
@@ -244,6 +304,9 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
               break;
 
             case "done":
+              // Flush any remaining text as a final text-segment
+              // This captures the last part of the response that was being streamed
+              flushTextSegment();
               setStatus("done");
               setState(event.state);
               // Update messages with the new conversation history
@@ -255,6 +318,8 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
               break;
 
             case "error":
+              // Flush any remaining text before showing error
+              flushTextSegment();
               setStatus("error");
               setError(event.error);
               // Mark any pending tool calls as failed
@@ -270,16 +335,20 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
         }
 
         // Save the final text and tool calls before resetting
-        const finalText = accumulatedTextRef.current;
+        const finalText = totalTextRef.current;
         const finalToolCalls = [...toolCallsRef.current];
         setLastCompletedText(finalText);
         setStatus("idle");
         return { text: finalText, toolCalls: finalToolCalls };
       } catch (err) {
         if ((err as Error).name === "AbortError") {
+          // Flush remaining text before aborting
+          flushTextSegment();
           setStatus("idle");
-          return { text: accumulatedTextRef.current, toolCalls: toolCallsRef.current };
+          return { text: totalTextRef.current, toolCalls: toolCallsRef.current };
         } else {
+          // Flush remaining text before showing error
+          flushTextSegment();
           setStatus("error");
           setError(err as Error);
           return { text: "", toolCalls: [] };
@@ -288,7 +357,7 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
         abortControllerRef.current = null;
       }
     },
-    [state, messages, addEvent]
+    [state, messages, addEvent, flushTextSegment]
   );
 
   const abort = useCallback(() => {
@@ -313,6 +382,10 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
 
   const clearStreamingText = useCallback(() => {
     setStreamingText("");
+    setEvents([]);
+  }, []);
+
+  const clearEvents = useCallback(() => {
     setEvents([]);
   }, []);
 
@@ -392,6 +465,7 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
     abort,
     clear,
     clearStreamingText,
+    clearEvents,
     setModel,
     currentModel,
     features,
