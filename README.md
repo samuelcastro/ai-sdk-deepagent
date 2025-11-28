@@ -48,7 +48,7 @@ import { createDeepAgent } from 'ai-sdk-deep-agent';
 import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
   systemPrompt: 'You are an expert researcher.',
 });
 
@@ -74,17 +74,17 @@ import { azure } from '@ai-sdk/azure';
 
 // Anthropic
 const agent1 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
 });
 
 // OpenAI
 const agent2 = createDeepAgent({
-  model: openai('gpt-4o'),
+  model: openai('gpt-5'),
 });
 
 // Azure OpenAI
 const agent3 = createDeepAgent({
-  model: azure('gpt-4', {
+  model: azure('gpt-5-mini', {
     apiKey: process.env.AZURE_OPENAI_API_KEY,
     resourceName: 'my-resource',
   }),
@@ -92,7 +92,7 @@ const agent3 = createDeepAgent({
 
 // With custom configuration
 const agent4 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514', {
+  model: anthropic('claude-sonnet-4-5-20250929', {
     apiKey: process.env.CUSTOM_API_KEY,
     baseURL: 'https://custom-endpoint.com',
   }),
@@ -160,19 +160,19 @@ import { anthropic } from '@ai-sdk/anthropic';
 
 // Default: In-memory (ephemeral)
 const agent1 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
 });
 
 // Filesystem: Persist to disk
 const agent2 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
   backend: new FilesystemBackend({ rootDir: './agent-workspace' }),
 });
 
 // Persistent: Cross-conversation memory with custom store
 const store = new InMemoryStore(); // Or implement KeyValueStore for Redis, SQLite, etc.
 const agent3 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
   backend: new PersistentBackend({ store, namespace: 'my-project' }),
 });
 ```
@@ -185,7 +185,7 @@ Enable prompt caching for improved performance with Anthropic models:
 import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
   enablePromptCaching: true, // Caches system prompt for faster subsequent calls
 });
 ```
@@ -208,7 +208,7 @@ Automatically summarize older messages when approaching token limits:
 import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
   summarization: {
     enabled: true,
     tokenThreshold: 170000, // Trigger summarization at 170k tokens
@@ -259,7 +259,7 @@ Stream responses with real-time events for tool calls, file operations, and more
 import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
 });
 
 // Stream with events
@@ -314,7 +314,7 @@ import { createDeepAgent, type ModelMessage } from 'ai-sdk-deep-agent';
 import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
+  model: anthropic('claude-sonnet-4-5-20250929'),
 });
 
 let messages: ModelMessage[] = [];
@@ -375,7 +375,7 @@ Creates a new Deep Agent instance.
 
 **Parameters:**
 
-- `model: LanguageModel` - **Required.** AI SDK LanguageModel instance (e.g., `anthropic('claude-sonnet-4-20250514')`)
+- `model: LanguageModel` - **Required.** AI SDK LanguageModel instance (e.g., `anthropic('claude-sonnet-4-5-20250929')`)
 - `tools?: ToolSet` - Custom tools to add
 - `systemPrompt?: string` - Custom system prompt
 - `subagents?: SubAgent[]` - Subagent specifications (each can have its own `model`)
@@ -452,7 +452,7 @@ bunx deep-agent
 bun run cli
 
 # With options
-bunx ai-sdk-deep-agent --model anthropic/claude-haiku-4-5-20251001 --work-dir ./my-project
+bunx ai-sdk-deep-agent --model anthropic/claude-haiku-4-5-20251001
 ```
 
 ### CLI Commands

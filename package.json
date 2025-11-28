@@ -27,8 +27,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run typecheck",
-    "cli": "bun src/cli/index.ts",
-    "cli-ink": "bun src/cli-ink/index.tsx"
+    "cli": "bun src/cli/index.tsx"
   },
   "repository": {
     "type": "git",
