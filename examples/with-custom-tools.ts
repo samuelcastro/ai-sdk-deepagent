@@ -7,6 +7,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createDeepAgent } from "../src/index.ts";
+import { anthropic } from "@ai-sdk/anthropic";
 
 // Custom tool: Get current date/time
 const getCurrentTime = tool({
@@ -55,7 +56,7 @@ const randomNumber = tool({
 
 async function main() {
   const agent = createDeepAgent({
-    model: "anthropic/claude-sonnet-4-20250514",
+    model: anthropic("claude-sonnet-4-20250514"),
     systemPrompt: `You are a helpful assistant with access to utility tools.
 
 You have access to:

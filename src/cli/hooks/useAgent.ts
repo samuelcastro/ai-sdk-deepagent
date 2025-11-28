@@ -10,6 +10,7 @@ import type {
   SummarizationConfig,
 } from "../../types.js";
 import { createDeepAgent } from "../../agent.js";
+import { parseModelString } from "../../utils/model-parser.js";
 import type { FilesystemBackend } from "../../backends/filesystem.js";
 import type { ToolCallData } from "../components/Message.js";
 
@@ -130,7 +131,7 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
   
   const agentRef = useRef(
     createDeepAgent({
-      model: currentModel,
+      model: parseModelString(currentModel),
       maxSteps: options.maxSteps,
       systemPrompt: options.systemPrompt,
       backend: options.backend,
@@ -327,9 +328,9 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
       const newPromptCaching = overrides.promptCaching ?? promptCachingEnabled;
       const newEvictionLimit = overrides.evictionLimit ?? evictionLimit;
       const newSummarization = overrides.summarization ?? summarizationConfig;
-      
+
       agentRef.current = createDeepAgent({
-        model: newModel,
+        model: parseModelString(newModel),
         maxSteps: options.maxSteps,
         systemPrompt: options.systemPrompt,
         backend: options.backend,

@@ -25,11 +25,39 @@ import {
  * Backend that stores files in shared state (ephemeral).
  *
  * Files persist within a single agent invocation but not across invocations.
- * This is the default backend for deep agents.
+ * This is the default backend for deep agents when no backend is specified.
+ *
+ * Files are stored in memory as part of the `DeepAgentState`, making this backend
+ * fast but non-persistent. Use `FilesystemBackend` or `PersistentBackend` for
+ * cross-session persistence.
+ *
+ * @example Default usage (no backend specified)
+ * ```typescript
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   // StateBackend is used by default
+ * });
+ * ```
+ *
+ * @example Explicit usage
+ * ```typescript
+ * const state: DeepAgentState = { todos: [], files: {} };
+ * const backend = new StateBackend(state);
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ * });
+ * ```
  */
 export class StateBackend implements BackendProtocol {
   private state: DeepAgentState;
 
+  /**
+   * Create a new StateBackend instance.
+   *
+   * @param state - The DeepAgentState object that will store the files.
+   *                Files are stored in `state.files` as a Record<string, FileData>.
+   */
   constructor(state: DeepAgentState) {
     this.state = state;
   }

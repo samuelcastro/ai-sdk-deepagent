@@ -2,9 +2,7 @@
  * Subagent tool for task delegation using AI SDK v6 ToolLoopAgent.
  */
 
-import { tool, ToolLoopAgent, stepCountIs, type ToolSet } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
+import { tool, ToolLoopAgent, stepCountIs, type ToolSet, type LanguageModel } from "ai";
 import { z } from "zod";
 import type {
   SubAgent,
@@ -28,8 +26,8 @@ import { createFilesystemTools } from "./filesystem.ts";
  * Options for creating the subagent tool.
  */
 export interface CreateSubagentToolOptions {
-  /** Default model for subagents */
-  defaultModel: string;
+  /** Default model for subagents (AI SDK LanguageModel instance) */
+  defaultModel: LanguageModel;
   /** Default tools available to all subagents */
   defaultTools?: ToolSet;
   /** List of custom subagent specifications */
@@ -42,21 +40,6 @@ export interface CreateSubagentToolOptions {
   taskDescription?: string | null;
   /** Optional callback for emitting events */
   onEvent?: EventCallback;
-}
-
-/**
- * Parse model string to get the appropriate model instance.
- */
-function parseModel(modelString: string) {
-  const [provider, modelName] = modelString.split("/");
-
-  if (provider === "anthropic") {
-    return anthropic(modelName || "claude-sonnet-4-20250514");
-  } else if (provider === "openai") {
-    return openai(modelName || "gpt-4o");
-  }
-
-  return anthropic(modelString);
 }
 
 /**
@@ -92,7 +75,7 @@ export function createSubagentTool(
   // Build subagent registry
   const subagentRegistry: Record<
     string,
-    { systemPrompt: string; tools: ToolSet; model: string }
+    { systemPrompt: string; tools: ToolSet; model: LanguageModel }
   > = {};
   const subagentDescriptions: string[] = [];
 
@@ -172,7 +155,7 @@ export function createSubagentTool(
       try {
         // Create and run a ToolLoopAgent for the subagent
         const subagent = new ToolLoopAgent({
-          model: parseModel(subagentConfig.model),
+          model: subagentConfig.model,
           instructions: subagentConfig.systemPrompt,
           tools: allTools,
           stopWhen: stepCountIs(50), // Allow substantial work

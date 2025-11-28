@@ -22,4 +22,7 @@ export {
   type SummarizationOptions,
   type SummarizationResult,
 } from "./summarization.js";
+export {
+  parseModelString,
+} from "./model-parser.js";
 

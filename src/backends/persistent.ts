@@ -27,43 +27,97 @@ import {
 /**
  * Generic key-value store interface for persistent storage.
  *
- * Implement this interface to use any storage backend (Redis, SQLite, etc.)
+ * Implement this interface to use any storage backend (Redis, SQLite, cloud storage, etc.)
+ * with PersistentBackend. The interface uses hierarchical namespaces for organization.
+ *
+ * @example Redis implementation
+ * ```typescript
+ * class RedisStore implements KeyValueStore {
+ *   constructor(private redis: RedisClient) {}
+ *
+ *   async get(namespace: string[], key: string) {
+ *     const redisKey = [...namespace, key].join(':');
+ *     const data = await this.redis.get(redisKey);
+ *     return data ? JSON.parse(data) : undefined;
+ *   }
+ *
+ *   async put(namespace: string[], key: string, value: Record<string, unknown>) {
+ *     const redisKey = [...namespace, key].join(':');
+ *     await this.redis.set(redisKey, JSON.stringify(value));
+ *   }
+ *
+ *   async delete(namespace: string[], key: string) {
+ *     const redisKey = [...namespace, key].join(':');
+ *     await this.redis.del(redisKey);
+ *   }
+ *
+ *   async list(namespace: string[]) {
+ *     const prefix = [...namespace].join(':') + ':';
+ *     const keys = await this.redis.keys(prefix + '*');
+ *     const results = [];
+ *     for (const key of keys) {
+ *       const data = await this.redis.get(key);
+ *       if (data) {
+ *         const relativeKey = key.substring(prefix.length);
+ *         results.push({ key: relativeKey, value: JSON.parse(data) });
+ *       }
+ *     }
+ *     return results;
+ *   }
+ * }
+ * ```
  */
 export interface KeyValueStore {
   /**
-   * Get a value by key.
-   * @param namespace - Hierarchical namespace (e.g., ["files", "project1"])
-   * @param key - The key to retrieve
-   * @returns The stored value or undefined if not found
+   * Get a value by key from the store.
+   * @param namespace - Hierarchical namespace array (e.g., ["project1", "filesystem"])
+   * @param key - The key to retrieve (file path in the case of PersistentBackend)
+   * @returns The stored value as a record, or undefined if not found
    */
   get(namespace: string[], key: string): Promise<Record<string, unknown> | undefined>;
 
   /**
-   * Store a value by key.
-   * @param namespace - Hierarchical namespace
-   * @param key - The key to store
-   * @param value - The value to store
+   * Store a value by key in the store.
+   * @param namespace - Hierarchical namespace array
+   * @param key - The key to store (file path in the case of PersistentBackend)
+   * @param value - The value to store (must be serializable to JSON)
    */
   put(namespace: string[], key: string, value: Record<string, unknown>): Promise<void>;
 
   /**
-   * Delete a value by key.
-   * @param namespace - Hierarchical namespace
-   * @param key - The key to delete
+   * Delete a value by key from the store.
+   * @param namespace - Hierarchical namespace array
+   * @param key - The key to delete (file path in the case of PersistentBackend)
    */
   delete(namespace: string[], key: string): Promise<void>;
 
   /**
-   * List all keys in a namespace.
-   * @param namespace - Hierarchical namespace
-   * @returns Array of items with key and value
+   * List all keys and values in a namespace.
+   * @param namespace - Hierarchical namespace array
+   * @returns Array of items with key and value pairs directly in this namespace
+   *          (not including sub-namespaces)
    */
   list(namespace: string[]): Promise<Array<{ key: string; value: Record<string, unknown> }>>;
 }
 
 /**
  * Simple in-memory implementation of KeyValueStore.
- * Useful for testing or single-session persistence.
+ *
+ * Useful for testing or single-session persistence. Data is stored in a Map
+ * and does not persist across application restarts.
+ *
+ * @example Basic usage
+ * ```typescript
+ * const store = new InMemoryStore();
+ * const backend = new PersistentBackend({ store });
+ * ```
+ *
+ * @example For testing
+ * ```typescript
+ * const store = new InMemoryStore();
+ * // ... run tests ...
+ * store.clear(); // Clean up after tests
+ * ```
  */
 export class InMemoryStore implements KeyValueStore {
   private data = new Map<string, Record<string, unknown>>();
@@ -128,22 +182,131 @@ export class InMemoryStore implements KeyValueStore {
  * Options for creating a PersistentBackend.
  */
 export interface PersistentBackendOptions {
-  /** The key-value store to use */
+  /** 
+   * **Required.** The key-value store implementation to use.
+   * 
+   * You can use the built-in `InMemoryStore` for testing, or implement `KeyValueStore`
+   * for custom storage (Redis, SQLite, etc.).
+   * 
+   * @see {@link KeyValueStore} for the interface definition
+   * @see {@link InMemoryStore} for a simple in-memory implementation
+   */
   store: KeyValueStore;
-  /** Optional namespace prefix for isolation (e.g., project ID, user ID) */
+  /** 
+   * Optional namespace prefix for isolation (e.g., project ID, user ID).
+   * 
+   * This allows multiple agents or projects to share the same store without conflicts.
+   * Files are stored under `[namespace]/filesystem/` in the key-value store.
+   * 
+   * Default: "default"
+   */
   namespace?: string;
 }
 
 /**
  * Backend that stores files in a persistent key-value store.
  *
- * This provides cross-conversation file persistence that survives
- * between agent sessions.
+ * This provides cross-conversation file persistence that survives between agent sessions.
+ * Files are stored in the provided key-value store, allowing you to use any storage backend
+ * (Redis, SQLite, cloud storage, etc.) by implementing the `KeyValueStore` interface.
+ *
+ * @example Using InMemoryStore (for testing or single-session persistence)
+ * ```typescript
+ * import { createDeepAgent } from 'ai-sdk-deep-agent';
+ * import { PersistentBackend, InMemoryStore } from 'ai-sdk-deep-agent';
+ * import { anthropic } from '@ai-sdk/anthropic';
+ *
+ * const store = new InMemoryStore();
+ * const backend = new PersistentBackend({ store });
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ * });
+ * ```
+ *
+ * @example With custom namespace for project isolation
+ * ```typescript
+ * import { createDeepAgent } from 'ai-sdk-deep-agent';
+ * import { PersistentBackend, InMemoryStore } from 'ai-sdk-deep-agent';
+ * import { anthropic } from '@ai-sdk/anthropic';
+ *
+ * const store = new InMemoryStore();
+ * const backend = new PersistentBackend({
+ *   store,
+ *   namespace: 'project-123', // Isolate files for this project
+ * });
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ * });
+ * ```
+ *
+ * @example Custom KeyValueStore implementation (Redis)
+ * ```typescript
+ * import { createDeepAgent } from 'ai-sdk-deep-agent';
+ * import { PersistentBackend, type KeyValueStore } from 'ai-sdk-deep-agent';
+ * import { anthropic } from '@ai-sdk/anthropic';
+ * import { createClient } from 'redis';
+ *
+ * class RedisStore implements KeyValueStore {
+ *   constructor(private redis: ReturnType<typeof createClient>) {}
+ *
+ *   async get(namespace: string[], key: string) {
+ *     const redisKey = [...namespace, key].join(':');
+ *     const data = await this.redis.get(redisKey);
+ *     return data ? JSON.parse(data) : undefined;
+ *   }
+ *
+ *   async put(namespace: string[], key: string, value: Record<string, unknown>) {
+ *     const redisKey = [...namespace, key].join(':');
+ *     await this.redis.set(redisKey, JSON.stringify(value));
+ *   }
+ *
+ *   async delete(namespace: string[], key: string) {
+ *     const redisKey = [...namespace, key].join(':');
+ *     await this.redis.del(redisKey);
+ *   }
+ *
+ *   async list(namespace: string[]) {
+ *     const prefix = [...namespace].join(':') + ':';
+ *     const keys = await this.redis.keys(prefix + '*');
+ *     const results = [];
+ *     for (const key of keys) {
+ *       const data = await this.redis.get(key);
+ *       if (data) {
+ *         const relativeKey = key.substring(prefix.length);
+ *         results.push({ key: relativeKey, value: JSON.parse(data) });
+ *       }
+ *     }
+ *     return results;
+ *   }
+ * }
+ *
+ * const redis = createClient();
+ * await redis.connect();
+ *
+ * const backend = new PersistentBackend({ 
+ *   store: new RedisStore(redis),
+ *   namespace: 'production'
+ * });
+ *
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ * });
+ * ```
  */
 export class PersistentBackend implements BackendProtocol {
   private store: KeyValueStore;
   private namespacePrefix: string;
 
+  /**
+   * Create a new PersistentBackend instance.
+   *
+   * @param options - Configuration options
+   * @param options.store - The key-value store implementation to use
+   * @param options.namespace - Optional namespace prefix for file isolation
+   */
   constructor(options: PersistentBackendOptions) {
     this.store = options.store;
     this.namespacePrefix = options.namespace || "default";

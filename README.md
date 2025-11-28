@@ -41,9 +41,10 @@ bun add -g ai-sdk-deep-agent
 
 ```typescript
 import { createDeepAgent } from 'ai-sdk-deep-agent';
+import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: anthropic('claude-sonnet-4-20250514'),
   systemPrompt: 'You are an expert researcher.',
 });
 
@@ -60,14 +61,44 @@ console.log('Files:', Object.keys(result.state.files));
 
 ### Model
 
-Specify the model to use (supports any model string compatible with Vercel AI SDK):
+Specify the model using AI SDK provider instances (supports any provider from the Vercel AI SDK ecosystem):
 
 ```typescript
-const agent = createDeepAgent({
-  model: 'anthropic/claude-sonnet-4-20250514',
-  // or 'openai/gpt-4o', etc.
+import { anthropic } from '@ai-sdk/anthropic';
+import { openai } from '@ai-sdk/openai';
+import { azure } from '@ai-sdk/azure';
+
+// Anthropic
+const agent1 = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514'),
+});
+
+// OpenAI
+const agent2 = createDeepAgent({
+  model: openai('gpt-4o'),
+});
+
+// Azure OpenAI
+const agent3 = createDeepAgent({
+  model: azure('gpt-4', {
+    apiKey: process.env.AZURE_OPENAI_API_KEY,
+    resourceName: 'my-resource',
+  }),
+});
+
+// With custom configuration
+const agent4 = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514', {
+    apiKey: process.env.CUSTOM_API_KEY,
+    baseURL: 'https://custom-endpoint.com',
+  }),
 });
 ```
+
+This approach allows you to:
+- Configure API keys, base URLs, and timeouts per provider
+- Use any AI SDK-compatible provider (Anthropic, OpenAI, Azure, Bedrock, Groq, etc.)
+- Mix and match models for main agent vs. subagents
 
 ### Custom Tools
 
@@ -98,15 +129,18 @@ Define specialized subagents for task delegation:
 
 ```typescript
 import { createDeepAgent, type SubAgent } from 'ai-sdk-deep-agent';
+import { anthropic } from '@ai-sdk/anthropic';
 
 const researchSubagent: SubAgent = {
   name: 'research-agent',
   description: 'Used for in-depth research on specific topics',
   systemPrompt: 'You are a dedicated researcher...',
-  // Optional: custom tools, model override
+  // Optional: use a different model for this subagent
+  model: anthropic('claude-haiku-4-5-20251001'),
 };
 
 const agent = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514'),
   subagents: [researchSubagent],
 });
 ```
@@ -117,18 +151,23 @@ Choose how files are stored:
 
 ```typescript
 import { createDeepAgent, StateBackend, FilesystemBackend, PersistentBackend, InMemoryStore } from 'ai-sdk-deep-agent';
+import { anthropic } from '@ai-sdk/anthropic';
 
 // Default: In-memory (ephemeral)
-const agent1 = createDeepAgent({});
+const agent1 = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514'),
+});
 
 // Filesystem: Persist to disk
 const agent2 = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514'),
   backend: new FilesystemBackend({ rootDir: './agent-workspace' }),
 });
 
 // Persistent: Cross-conversation memory with custom store
 const store = new InMemoryStore(); // Or implement KeyValueStore for Redis, SQLite, etc.
 const agent3 = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514'),
   backend: new PersistentBackend({ store, namespace: 'my-project' }),
 });
 ```
@@ -138,8 +177,10 @@ const agent3 = createDeepAgent({
 Enable prompt caching for improved performance with Anthropic models:
 
 ```typescript
+import { anthropic } from '@ai-sdk/anthropic';
+
 const agent = createDeepAgent({
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: anthropic('claude-sonnet-4-20250514'),
   enablePromptCaching: true, // Caches system prompt for faster subsequent calls
 });
 ```
@@ -159,12 +200,15 @@ const agent = createDeepAgent({
 Automatically summarize older messages when approaching token limits:
 
 ```typescript
+import { anthropic } from '@ai-sdk/anthropic';
+
 const agent = createDeepAgent({
+  model: anthropic('claude-sonnet-4-20250514'),
   summarization: {
     enabled: true,
     tokenThreshold: 170000, // Trigger summarization at 170k tokens
     keepMessages: 6, // Keep last 6 messages intact
-    model: 'anthropic/claude-haiku-4-5-20251001', // Use fast model for summarization
+    model: anthropic('claude-haiku-4-5-20251001'), // Use fast model for summarization
   },
 });
 ```
@@ -207,8 +251,10 @@ Spawn isolated subagents for complex subtasks:
 Stream responses with real-time events for tool calls, file operations, and more:
 
 ```typescript
+import { anthropic } from '@ai-sdk/anthropic';
+
 const agent = createDeepAgent({
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: anthropic('claude-sonnet-4-20250514'),
 });
 
 // Stream with events
@@ -260,9 +306,10 @@ Maintain conversation history across multiple turns:
 
 ```typescript
 import { createDeepAgent, type ModelMessage } from 'ai-sdk-deep-agent';
+import { anthropic } from '@ai-sdk/anthropic';
 
 const agent = createDeepAgent({
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: anthropic('claude-sonnet-4-20250514'),
 });
 
 let messages: ModelMessage[] = [];
@@ -323,14 +370,14 @@ Creates a new Deep Agent instance.
 
 **Parameters:**
 
-- `model?: string` - Model identifier (default: `'anthropic/claude-sonnet-4-20250514'`)
+- `model: LanguageModel` - **Required.** AI SDK LanguageModel instance (e.g., `anthropic('claude-sonnet-4-20250514')`)
 - `tools?: ToolSet` - Custom tools to add
 - `systemPrompt?: string` - Custom system prompt
-- `subagents?: SubAgent[]` - Subagent specifications
+- `subagents?: SubAgent[]` - Subagent specifications (each can have its own `model`)
 - `backend?: BackendProtocol | BackendFactory` - Storage backend
 - `maxSteps?: number` - Maximum tool call steps (default: 100)
 - `includeGeneralPurposeAgent?: boolean` - Include default subagent (default: true)
-- `enablePromptCaching?: boolean` - Enable Anthropic prompt caching (default: false)
+- `enablePromptCaching?: boolean` - Enable prompt caching (default: false, Anthropic only)
 - `toolResultEvictionLimit?: number` - Token limit for tool result eviction
 - `summarization?: SummarizationConfig` - Conversation summarization settings
 

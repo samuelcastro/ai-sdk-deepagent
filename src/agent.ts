@@ -9,9 +9,8 @@ import {
   streamText,
   type ToolSet,
   type StopCondition,
+  type LanguageModel,
 } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
 import type {
   CreateDeepAgentParams,
   DeepAgentState,
@@ -58,34 +57,17 @@ function buildSystemPrompt(
 }
 
 /**
- * Parse model string to get the appropriate model instance.
- * Supports formats like "anthropic/claude-sonnet-4-20250514" or "openai/gpt-4o"
- */
-function parseModel(modelString: string) {
-  const [provider, modelName] = modelString.split("/");
-
-  if (provider === "anthropic") {
-    return anthropic(modelName || "claude-sonnet-4-20250514");
-  } else if (provider === "openai") {
-    return openai(modelName || "gpt-4o");
-  }
-
-  // Default to anthropic
-  return anthropic(modelString);
-}
-
-/**
  * Deep Agent wrapper class that provides generate() and stream() methods.
  * Uses ToolLoopAgent from AI SDK v6 for the agent loop.
  */
 export class DeepAgent {
-  private model: string;
+  private model: LanguageModel;
   private systemPrompt: string;
   private userTools: ToolSet;
   private maxSteps: number;
   private backend: BackendProtocol | BackendFactory;
   private subagentOptions: {
-    defaultModel: string;
+    defaultModel: LanguageModel;
     defaultTools: ToolSet;
     subagents: CreateDeepAgentParams["subagents"];
     includeGeneralPurposeAgent: boolean;
@@ -94,9 +76,9 @@ export class DeepAgent {
   private enablePromptCaching: boolean;
   private summarizationConfig?: SummarizationConfig;
 
-  constructor(params: CreateDeepAgentParams = {}) {
+  constructor(params: CreateDeepAgentParams) {
     const {
-      model = "anthropic/claude-sonnet-4-20250514",
+      model,
       tools = {},
       systemPrompt,
       subagents = [],
@@ -184,7 +166,7 @@ export class DeepAgent {
     const tools = this.createTools(state, onEvent);
 
     return new ToolLoopAgent({
-      model: parseModel(this.model),
+      model: this.model,
       instructions: this.systemPrompt,
       tools,
       stopWhen: stepCountIs(maxSteps ?? this.maxSteps),
@@ -333,14 +315,14 @@ export class DeepAgent {
     try {
       // Build streamText options
       const streamOptions: Parameters<typeof streamText>[0] = {
-        model: parseModel(this.model),
+        model: this.model,
         messages: inputMessages,
         tools,
         stopWhen: stepCountIs(options.maxSteps ?? this.maxSteps),
         abortSignal: options.abortSignal,
         onStepFinish: ({ toolCalls, toolResults }) => {
           stepNumber++;
-          
+
           // Emit step finish event
           const stepEvent: DeepAgentEvent = {
             type: "step-finish",
@@ -356,7 +338,7 @@ export class DeepAgent {
       };
 
       // Add system prompt with optional caching for Anthropic models
-      if (this.enablePromptCaching && this.model.includes("anthropic")) {
+      if (this.enablePromptCaching) {
         // Use messages format with cache control for Anthropic
         streamOptions.messages = [
           {
@@ -457,25 +439,126 @@ export class DeepAgent {
 /**
  * Create a Deep Agent with planning, filesystem, and subagent capabilities.
  *
- * @example
+ * @param params - Configuration object for the Deep Agent
+ * @param params.model - **Required.** AI SDK LanguageModel instance (e.g., `anthropic('claude-sonnet-4-20250514')`, `openai('gpt-4o')`)
+ * @param params.systemPrompt - Optional custom system prompt for the agent
+ * @param params.tools - Optional custom tools to add to the agent (AI SDK ToolSet)
+ * @param params.subagents - Optional array of specialized subagent configurations for task delegation
+ * @param params.backend - Optional backend for filesystem operations (default: StateBackend for in-memory storage)
+ * @param params.maxSteps - Optional maximum number of steps for the agent loop (default: 100)
+ * @param params.includeGeneralPurposeAgent - Optional flag to include general-purpose subagent (default: true)
+ * @param params.toolResultEvictionLimit - Optional token limit before evicting large tool results to filesystem (default: disabled)
+ * @param params.enablePromptCaching - Optional flag to enable prompt caching for improved performance (Anthropic only, default: false)
+ * @param params.summarization - Optional summarization configuration for automatic conversation summarization
+ * @returns A configured DeepAgent instance
+ *
+ * @see {@link CreateDeepAgentParams} for detailed parameter types
+ *
+ * @example Basic usage
  * ```typescript
  * import { createDeepAgent } from 'ai-sdk-deep-agent';
+ * import { anthropic } from '@ai-sdk/anthropic';
  *
  * const agent = createDeepAgent({
- *   model: 'anthropic/claude-sonnet-4-20250514',
+ *   model: anthropic('claude-sonnet-4-20250514'),
  *   systemPrompt: 'You are a research assistant...',
  * });
  *
  * const result = await agent.generate({
  *   prompt: 'Research the topic and write a report',
  * });
+ * ```
  *
- * console.log(result.text);
- * console.log(result.state.todos);
- * console.log(result.state.files);
+ * @example With custom tools
+ * ```typescript
+ * import { tool } from 'ai';
+ * import { z } from 'zod';
+ *
+ * const customTool = tool({
+ *   description: 'Get current time',
+ *   inputSchema: z.object({}),
+ *   execute: async () => new Date().toISOString(),
+ * });
+ *
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   tools: { get_time: customTool },
+ * });
+ * ```
+ *
+ * @example With subagents
+ * ```typescript
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   subagents: [{
+ *     name: 'research-agent',
+ *     description: 'Specialized for research tasks',
+ *     systemPrompt: 'You are a research specialist...',
+ *   }],
+ * });
+ * ```
+ *
+ * @example With StateBackend (default, explicit)
+ * ```typescript
+ * import { StateBackend } from 'ai-sdk-deep-agent';
+ *
+ * const state = { todos: [], files: {} };
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend: new StateBackend(state), // Ephemeral in-memory storage
+ * });
+ * ```
+ *
+ * @example With FilesystemBackend
+ * ```typescript
+ * import { FilesystemBackend } from 'ai-sdk-deep-agent';
+ *
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend: new FilesystemBackend({ rootDir: './workspace' }), // Persist to disk
+ * });
+ * ```
+ *
+ * @example With PersistentBackend
+ * ```typescript
+ * import { PersistentBackend, InMemoryStore } from 'ai-sdk-deep-agent';
+ *
+ * const store = new InMemoryStore();
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend: new PersistentBackend({ store, namespace: 'project-1' }), // Cross-session persistence
+ * });
+ * ```
+ *
+ * @example With CompositeBackend
+ * ```typescript
+ * import { CompositeBackend, FilesystemBackend, StateBackend } from 'ai-sdk-deep-agent';
+ *
+ * const state = { todos: [], files: {} };
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend: new CompositeBackend(
+ *     new StateBackend(state),
+ *     { '/persistent/': new FilesystemBackend({ rootDir: './persistent' }) }
+ *   ), // Route files by path prefix
+ * });
+ * ```
+ *
+ * @example With performance optimizations
+ * ```typescript
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   enablePromptCaching: true,
+ *   toolResultEvictionLimit: 20000,
+ *   summarization: {
+ *     enabled: true,
+ *     tokenThreshold: 170000,
+ *     keepMessages: 6,
+ *   },
+ * });
  * ```
  */
-export function createDeepAgent(params: CreateDeepAgentParams = {}): DeepAgent {
+export function createDeepAgent(params: CreateDeepAgentParams): DeepAgent {
   return new DeepAgent(params);
 }
 

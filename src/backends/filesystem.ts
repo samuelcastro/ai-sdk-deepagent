@@ -26,12 +26,45 @@ const SUPPORTS_NOFOLLOW = fsSync.constants.O_NOFOLLOW !== undefined;
 
 /**
  * Backend that reads and writes files directly from the filesystem.
+ *
+ * Files are persisted to disk, making them available across agent invocations.
+ * This backend provides real file I/O operations with security checks to prevent
+ * directory traversal attacks.
+ *
+ * @example Basic usage
+ * ```typescript
+ * const backend = new FilesystemBackend({ rootDir: './workspace' });
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ * });
+ * ```
+ *
+ * @example With custom options
+ * ```typescript
+ * const backend = new FilesystemBackend({
+ *   rootDir: './my-project',
+ *   virtualMode: false,
+ *   maxFileSizeMb: 50, // Allow larger files
+ * });
+ * ```
  */
 export class FilesystemBackend implements BackendProtocol {
   private cwd: string;
   private virtualMode: boolean;
   private maxFileSizeBytes: number;
 
+  /**
+   * Create a new FilesystemBackend instance.
+   *
+   * @param options - Configuration options
+   * @param options.rootDir - Optional root directory for file operations (default: current working directory).
+   *                          All file paths are resolved relative to this directory.
+   * @param options.virtualMode - Optional flag for virtual mode (default: false).
+   *                              When true, files are stored in memory but paths are validated against filesystem.
+   * @param options.maxFileSizeMb - Optional maximum file size in MB (default: 10).
+   *                                Files larger than this will be rejected.
+   */
   constructor(
     options: {
       rootDir?: string;

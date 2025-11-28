@@ -5,9 +5,7 @@
  * to prevent context overflow while preserving important context.
  */
 
-import { generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
+import { generateText, type LanguageModel } from "ai";
 import type { ModelMessage } from "../types.js";
 import { estimateTokens } from "./eviction.js";
 
@@ -26,8 +24,8 @@ export const DEFAULT_KEEP_MESSAGES = 6;
  * Options for summarization.
  */
 export interface SummarizationOptions {
-  /** Model to use for summarization (e.g., 'anthropic/claude-haiku-4-5-20251001') */
-  model: string;
+  /** Model to use for summarization (AI SDK LanguageModel instance) */
+  model: LanguageModel;
   /** Token threshold to trigger summarization (default: 170000) */
   tokenThreshold?: number;
   /** Number of recent messages to keep intact (default: 6) */
@@ -67,22 +65,6 @@ export function estimateMessagesTokens(messages: ModelMessage[]): number {
   }
 
   return total;
-}
-
-/**
- * Parse model string to get the appropriate model instance.
- */
-function parseModel(modelString: string) {
-  const [provider, modelName] = modelString.split("/");
-
-  if (provider === "anthropic") {
-    return anthropic(modelName || "claude-haiku-4-5-20251001");
-  } else if (provider === "openai") {
-    return openai(modelName || "gpt-4o-mini");
-  }
-
-  // Default to anthropic
-  return anthropic(modelString);
 }
 
 /**
@@ -134,12 +116,12 @@ function formatMessagesForSummary(messages: ModelMessage[]): string {
  */
 async function generateSummary(
   messages: ModelMessage[],
-  model: string
+  model: LanguageModel
 ): Promise<string> {
   const conversationText = formatMessagesForSummary(messages);
 
   const result = await generateText({
-    model: parseModel(model),
+    model,
     system: `You are a conversation summarizer. Your task is to create a concise but comprehensive summary of the conversation that preserves:
 1. Key decisions and conclusions
 2. Important context and background information
@@ -166,8 +148,10 @@ Keep the summary focused and avoid redundancy. The summary should allow someone 
  *
  * @example
  * ```typescript
+ * import { anthropic } from '@ai-sdk/anthropic';
+ *
  * const result = await summarizeIfNeeded(messages, {
- *   model: "anthropic/claude-haiku-4-5-20251001",
+ *   model: anthropic('claude-haiku-4-5-20251001'),
  *   tokenThreshold: 170000,
  *   keepMessages: 6,
  * });

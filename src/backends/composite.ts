@@ -14,15 +14,53 @@ import type {
 /**
  * Backend that routes file operations to different backends based on path prefix.
  *
- * This enables hybrid storage strategies like:
- * - `/memories/` → FilesystemBackend (persistent)
- * - Everything else → StateBackend (ephemeral)
+ * This enables hybrid storage strategies by routing files to different backends
+ * based on their path prefix. Useful for separating persistent and ephemeral storage,
+ * or using different storage backends for different types of files.
+ *
+ * @example Hybrid storage strategy
+ * ```typescript
+ * import { CompositeBackend, FilesystemBackend, StateBackend } from 'ai-sdk-deep-agent';
+ *
+ * const state = { todos: [], files: {} };
+ * const backend = new CompositeBackend(
+ *   new StateBackend(state), // Default: ephemeral storage
+ *   {
+ *     '/persistent/': new FilesystemBackend({ rootDir: './persistent' }), // Persistent files
+ *     '/cache/': new StateBackend(state), // Cached files (ephemeral)
+ *   }
+ * );
+ *
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ * });
+ * ```
+ *
+ * @example Multiple persistent backends
+ * ```typescript
+ * const backend = new CompositeBackend(
+ *   new FilesystemBackend({ rootDir: './default' }),
+ *   {
+ *     '/user-data/': new FilesystemBackend({ rootDir: './user-data' }),
+ *     '/system/': new FilesystemBackend({ rootDir: './system' }),
+ *   }
+ * );
+ * ```
  */
 export class CompositeBackend implements BackendProtocol {
   private defaultBackend: BackendProtocol;
   private routes: Record<string, BackendProtocol>;
   private sortedRoutes: Array<[string, BackendProtocol]>;
 
+  /**
+   * Create a new CompositeBackend instance.
+   *
+   * @param defaultBackend - Backend to use for paths that don't match any route prefix
+   * @param routes - Record mapping path prefixes to backends.
+   *                 Routes are matched by longest prefix first.
+   *                 Example: `{ '/persistent/': filesystemBackend, '/cache/': stateBackend }`
+   */
   constructor(
     defaultBackend: BackendProtocol,
     routes: Record<string, BackendProtocol>

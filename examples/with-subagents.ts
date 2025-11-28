@@ -7,6 +7,7 @@
  */
 
 import { createDeepAgent, type SubAgent } from "../src/index.ts";
+import { anthropic } from "@ai-sdk/anthropic";
 
 // Define a specialized research subagent
 const researchSubagent: SubAgent = {
@@ -19,6 +20,8 @@ const researchSubagent: SubAgent = {
 3. Return a comprehensive summary
 
 Focus only on the topic given. Be thorough and cite your reasoning.`,
+  // Optional: use a different model for this subagent
+  model: anthropic("claude-haiku-4-5-20251001"),
 };
 
 // Define a writing/editing subagent
@@ -36,7 +39,7 @@ Always read relevant files before writing. Ensure proper structure and flow.`,
 
 async function main() {
   const agent = createDeepAgent({
-    model: "anthropic/claude-sonnet-4-20250514",
+    model: anthropic("claude-sonnet-4-20250514"),
     systemPrompt: `You are a project manager coordinating research and writing tasks.
 
 Use the research-agent for gathering information on specific topics.
