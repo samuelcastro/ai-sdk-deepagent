@@ -1,35 +1,41 @@
 # AGENTS.md
 
-This file provides guidance to AI Agents i.e. Claude Code, Cursor, etc. when working with code in this repository.
+This file provides guidance to AI Agents (Claude Code, Cursor, etc.) when working with code in this repository.
 
 ## Project Overview
 
-This is **ai-sdk-deep-agent**, a TypeScript library implementing "Deep Agents" architecture using Vercel AI SDK v6. Deep Agents extend basic LLM tool-calling with four core pillars: planning tools (`write_todos`), virtual filesystem access, subagent spawning (`task`), and detailed prompting.
+**ai-sdk-deep-agent** is a TypeScript library implementing "Deep Agents" architecture using Vercel AI SDK v6. Deep Agents extend basic LLM tool-calling with four core pillars:
 
-**Key architectural pattern**: This library wraps AI SDK v6's `ToolLoopAgent` with a state management layer and specialized tools to enable complex, multi-step agent behaviors. The agent maintains a virtual filesystem and todo list across multiple tool-calling steps.
+1. **Planning tools** (`write_todos`) - Task planning and tracking
+2. **Virtual filesystem** - Stateful file operations across tool calls
+3. **Subagent spawning** (`task`) - Delegate work to specialized agents
+4. **Detailed prompting** - Rich system prompts and tool descriptions
+
+**Key Pattern**: This library wraps AI SDK v6's `ToolLoopAgent` with state management and specialized tools to enable complex, multi-step agent behaviors.
+
+**Documentation Structure**:
+
+- **AGENTS.md** (this file) - Quick reference for AI agents
+- **docs/architecture.md** - Detailed architecture and components
+- **docs/patterns.md** - Common usage patterns and code examples
+- **docs/checkpointers.md** - Session persistence patterns
+- **.github/PUBLISHING.md** - Publishing and release guide
 
 ## Feature Parity Tracking
 
-**IMPORTANT**: This project aims to reimplement LangChain's DeepAgents framework using Vercel AI SDK.
+This project reimplements LangChain's DeepAgents framework using Vercel AI SDK.
 
-- **Reference implementations**: `.refs/deepagentsjs/` (JS) and `.refs/deepagents/` (Python)
+- **Reference**: `.refs/deepagentsjs/` (JS) and `.refs/deepagents/` (Python)
 - **Feature tracker**: `.agent/PROJECT-STATE.md`
-- **Implementation framework**: `PLAYBOOK.md`
+- **Implementation framework**: `PLAYBOOK.md` (Research → Plan → Implement)
 
-### Implementing New Features (RPI Framework)
+**When implementing features**:
 
-**Before implementing any feature from `PROJECT-STATE.md`, you MUST read `PLAYBOOK.md`** — this document details the Research → Plan → Implement (RPI) framework used in this project.
+- Complex features → Full RPI (read `PLAYBOOK.md`)
+- Simple changes → Light plan
+- Trivial fixes → Direct implementation
 
-**When to use full RPI**:
-
-- Complex features spanning multiple files → Full RPI
-- Simple self-contained changes → Light plan only
-- Trivial fixes (typos, renames) → Direct implementation
-
-After completing a feature:
-
-1. Move it from "To Implement" to "Implemented" in `PROJECT-STATE.md`
-2. If unsupportable due to AI SDK limitations, add to "Won't Support" with reasoning
+**After completing**: Update `PROJECT-STATE.md` (move to "Implemented" or "Won't Support")
 
 ## Development Commands
 
@@ -40,481 +46,151 @@ bun test
 # Type checking
 bun run typecheck
 
-# Run CLI during development (uses parseModelString for backward compatibility)
+# Run CLI (development)
 bun run cli
-
-# Run CLI with custom options
 bun run cli -- --model anthropic/claude-haiku-4-5-20251001 --dir ./workspace
 
-# Run examples (now use provider instances)
+# Run examples
 bun examples/basic.ts
 bun examples/streaming.ts
-bun examples/with-subagents.ts
-bun examples/with-custom-tools.ts
-```
-
-## Architecture
-
-### Core Components
-
-1. **DeepAgent** (`src/agent.ts`): Main agent class that wraps `ToolLoopAgent` with state management
-   - **Requires** a `LanguageModel` instance (from AI SDK providers like `anthropic()`, `openai()`, etc.)
-   - Creates tools dynamically for each invocation with shared state
-   - Supports three generation modes: `generate()`, `stream()`, `streamWithEvents()`
-   - Handles conversation history via `messages` array for multi-turn conversations
-   - Implements prompt caching (Anthropic), tool result eviction, and auto-summarization
-
-2. **State Management** (`src/types.ts`):
-
-   ```typescript
-   interface DeepAgentState {
-     todos: TodoItem[];  // Task planning/tracking
-     files: Record<string, FileData>;  // Virtual filesystem
-   }
-   ```
-
-3. **Backends** (`src/backends/`):
-   - `StateBackend`: In-memory storage (default, ephemeral)
-   - `FilesystemBackend`: Persists files to actual disk
-   - `PersistentBackend`: Cross-conversation memory with key-value store
-   - `CompositeBackend`: Combines multiple backends (e.g., filesystem + cloud storage)
-
-   All backends implement `BackendProtocol` interface with methods: `read()`, `write()`, `edit()`, `ls()`, `lsInfo()`, `glob()`, `grep()`
-
-4. **Tools** (`src/tools/`):
-   - **Planning**: `write_todos` - Manages task lists with merge/replace strategies
-   - **Filesystem**: `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`
-   - **Subagents**: `task` - Spawns isolated subagents that share filesystem with parent
-
-5. **CLI** (`src/cli/index.tsx`):
-   - Built with Ink (React for CLI) - interactive terminal interface
-   - Real-time streaming with event visualization
-   - Slash commands: `/help`, `/todos`, `/files`, `/read <path>`, `/clear`, `/model <name>`, `/exit`
-   - Feature toggles: `/cache`, `/eviction`, `/summarize`, `/approve`, `/features`
-   - Tool approval: Safe mode (default) requires approval for write/edit/execute operations
-
-### Event System
-
-The `streamWithEvents()` method emits granular events during generation:
-
-- `text`: Streamed text chunks
-- `step-start`, `step-finish`: Agent reasoning steps
-- `tool-call`, `tool-result`: Tool invocations
-- `todos-changed`: Todo list modifications
-- `file-write-start`, `file-written`, `file-edited`: Filesystem changes
-- `subagent-start`, `subagent-finish`: Subagent delegation
-- `approval-requested`, `approval-response`: Tool approval flow (HITL)
-- `done`: Final state with conversation messages
-- `error`: Error occurred
-
-### Message Handling
-
-**Important**: The agent uses AI SDK's `messages` array for conversation history. When streaming with events:
-
-1. The `done` event includes `event.messages` - the updated conversation history
-2. Pass this back to the next `streamWithEvents()` call to maintain context
-3. The library automatically patches "dangling tool calls" (calls without results) via `patchToolCalls()`
-
-### Performance Features
-
-1. **Prompt Caching** (Anthropic only):
-   - Caches system prompt for faster subsequent calls
-   - Enabled via `enablePromptCaching: true`
-
-2. **Tool Result Eviction**:
-   - Large tool results (>20k tokens default) are evicted to virtual filesystem
-   - Prevents context overflow in long agent loops
-   - Controlled via `toolResultEvictionLimit` parameter
-
-3. **Auto-Summarization**:
-   - When conversation exceeds token threshold (170k default), older messages are summarized
-   - Keeps recent messages (6 default) intact for context
-   - Uses fast model (Haiku) for summarization by default
-
-### Human-in-the-Loop (HITL)
-
-The agent supports tool approval before execution, useful for destructive operations like file writes or command execution.
-
-**Library API:**
-
-```typescript
-import { anthropic } from '@ai-sdk/anthropic';
-import { createDeepAgent } from 'ai-sdk-deep-agent';
-
-const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  interruptOn: {
-    execute: true,        // Always require approval
-    write_file: true,     // Always require approval
-    edit_file: {          // Dynamic approval based on arguments
-      shouldApprove: (args) => !args.file_path.startsWith('/tmp/')
-    },
-  },
-});
-
-// Handle approvals via callback
-for await (const event of agent.streamWithEvents({
-  prompt: "Create a config file",
-  onApprovalRequest: async (request) => {
-    console.log(`Approve ${request.toolName}?`, request.args);
-    return true; // or false to deny
-  },
-})) {
-  // Handle events
-}
-```
-
-**CLI Approval Modes:**
-
-The CLI operates in two modes for tool execution:
-
-- **Safe Mode (default)**: Prompts for approval before `execute`, `write_file`, `edit_file`
-  - Status bar shows: 🔴 Safe mode
-  - At approval prompt: `[Y]` approve, `[N]` deny, `[A]` approve all
-
-- **Auto-Approve Mode**: All tool executions proceed without prompts
-  - Status bar shows: 🟢 Auto-approve
-  - Toggle with `/approve` command
-
-```bash
-# Start CLI (Safe mode by default)
-$ bun run cli
-
-# Toggle to Auto-approve mode
-> /approve
-🟢 Auto-approve enabled
-
-# Toggle back to Safe mode
-> /approve
-🔴 Safe mode enabled
 ```
 
 ## Key Files
 
+**Core:**
+
 - `src/agent.ts` - DeepAgent class and createDeepAgent factory
-- `src/types.ts` - TypeScript type definitions (now uses LanguageModel type)
+- `src/types.ts` - TypeScript type definitions
 - `src/prompts.ts` - System prompts for agent and tools
-- `src/tools/filesystem.ts` - Virtual filesystem tools implementation
-- `src/tools/subagent.ts` - Subagent spawning logic
-- `src/tools/todos.ts` - Todo management tool
-- `src/backends/` - Backend implementations for storage
-- `src/utils/` - Utilities for patching, eviction, summarization, token estimation
-- `src/utils/model-parser.ts` - **New**: Parses model strings to LanguageModel instances (for CLI backward compat)
-- `src/cli/index.tsx` - Interactive CLI application
-- `src/cli/hooks/useAgent.ts` - React hook that manages agent streaming (uses parseModelString)
+
+**Tools:**
+
+- `src/tools/filesystem.ts` - Virtual filesystem tools
+- `src/tools/subagent.ts` - Subagent spawning
+- `src/tools/todos.ts` - Todo management
+
+**Backends:**
+
+- `src/backends/state.ts` - In-memory storage (default)
+- `src/backends/filesystem.ts` - Disk persistence
+- `src/backends/persistent.ts` - Cross-conversation memory
+- `src/backends/composite.ts` - Combine multiple backends
+
+**CLI:**
+
+- `src/cli/index.tsx` - Interactive CLI (Ink/React)
+- `src/cli/hooks/useAgent.ts` - Agent streaming hook
+
+**Utils:**
+
+- `src/utils/model-parser.ts` - Parse model strings to LanguageModel instances (CLI only)
 
 ## Testing Patterns
 
-When writing tests:
-
-- Use `bun:test` instead of Jest or Vitest
-- Import from `bun:test`: `import { test, expect } from "bun:test";`
-- Tests are co-located with source files (e.g., `agent.test.ts`)
-- Test backend implementations separately from agent logic
-
-## Model Specification
-
-**Important**: The library now requires AI SDK `LanguageModel` instances instead of string-based model IDs.
+- Use `bun:test` (not Jest/Vitest)
+- Import: `import { test, expect } from "bun:test";`
+- Co-locate tests with source files (`agent.test.ts`)
+- Test backends separately from agent logic
 
 ```typescript
-import { anthropic } from '@ai-sdk/anthropic';
-import { openai } from '@ai-sdk/openai';
-import { azure } from '@ai-sdk/azure';
-import { createDeepAgent } from 'ai-sdk-deep-agent';
+import { test, expect } from "bun:test";
+import { createDeepAgent, StateBackend } from "ai-sdk-deep-agent";
 
-// Anthropic (recommended)
-const agent1 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-});
-
-// OpenAI
-const agent2 = createDeepAgent({
-  model: openai('gpt-4o'),
-});
-
-// Azure OpenAI
-const agent3 = createDeepAgent({
-  model: azure('gpt-4', {
-    apiKey: process.env.AZURE_OPENAI_API_KEY,
-    resourceName: 'my-resource',
-  }),
-});
-
-// Custom configuration
-const agent4 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514', {
-    apiKey: process.env.CUSTOM_API_KEY,
-    baseURL: 'https://custom-endpoint.com',
-  }),
+test("agent behavior", async () => {
+  const backend = new StateBackend();
+  const agent = createDeepAgent({ model, backend });
+  // ... test logic
 });
 ```
 
-**CLI Backward Compatibility**: The CLI internally uses `parseModelString()` from `src/utils/model-parser.ts` to convert string formats like `"anthropic/claude-sonnet-4-20250514"` into `LanguageModel` instances. This is only for the CLI - when using the library programmatically, always pass provider instances.
+## Publishing & Commit Messages
 
-## Publishing
+**CRITICAL**: This repo uses GitHub Actions for automated npm publishing. Commit messages control version bumps.
 
-This package publishes TypeScript source directly (not compiled JavaScript):
+### Commit Message Format
 
-- `main`, `module`, `types` all point to `./src/index.ts`
-- Requires Bun runtime for consumption
-- `prepublishOnly` script runs type checking before publish
-- CLI entry point: `./src/cli/index.tsx`
+Use semantic prefixes to control versioning:
+
+```bash
+# Patch (0.1.12 → 0.1.13) - Bug fixes, refactors, chores
+fix: resolve memory leak in checkpointer
+refactor: simplify backend logic
+chore: update dependencies
+
+# Minor (0.1.12 → 0.2.0) - New features (backwards-compatible)
+feat: add Redis backend support
+feature: implement parallel subagents
+
+# Major (0.1.12 → 1.0.0) - Breaking changes
+breaking: remove deprecated createAgent API
+major: refactor event system (breaking)
+```
+
+### Multi-Commit Push Behavior
+
+The workflow analyzes ALL commits since the last version tag. **Highest priority wins**:
+
+- If ANY commit contains "breaking" or "major" → **major** bump
+- Else if ANY commit contains "feat" or "feature" → **minor** bump
+- Otherwise → **patch** bump
+
+**Examples:**
+
+```bash
+# Scenario 1: Fixes only → Patch (0.1.12 → 0.1.13)
+git commit -m "fix: resolve bug A"
+git commit -m "fix: resolve bug B"
+git push origin main
+
+# Scenario 2: Fixes + Feature → Minor (0.1.12 → 0.2.0)
+git commit -m "fix: resolve checkpointer bug"
+git commit -m "feat: add new backend type"
+git push origin main
+
+# Scenario 3: Feature + Breaking → Major (0.1.12 → 1.0.0)
+git commit -m "feat: add caching"
+git commit -m "breaking: change API signature"
+git push origin main
+```
+
+### Publishing Triggers
+
+Workflow **ONLY** publishes when these files change:
+
+- `src/**` (source code)
+- `package.json`
+- `tsconfig.json`
+- `bun.lockb`
+
+Workflow **SKIPS** publishing for:
+
+- `examples/**`
+- `*.md` files
+- `.github/**`, `.agent/**`, `.refs/**`, `docs/**`
+
+**See**: `.github/PUBLISHING.md` for full publishing guide and setup instructions.
 
 ## Important Conventions
 
-1. **File paths in virtual filesystem**: Always relative to working directory (e.g., `/src/main.ts` or `main.ts`)
+1. **File paths**: Always relative to working directory (e.g., `/src/main.ts` or `main.ts`)
 2. **Todo status flow**: `pending` → `in_progress` → `completed` or `cancelled`
-3. **Backend resolution**: Backends can be instances (`BackendProtocol`) or factories (`BackendFactory`) that create instances from state
-4. **Subagent isolation**: Subagents share filesystem with parent but have independent todo lists and conversation history
-5. **Tool naming**: Core tools use snake_case (`write_todos`, `read_file`) following common CLI conventions
-6. **Event callbacks**: Optional `onEvent` parameter in tool creation enables real-time event streaming
+3. **Backend resolution**: Can be instances (`BackendProtocol`) or factories (`BackendFactory`)
+4. **Subagent isolation**: Share filesystem with parent, independent todos and history
+5. **Tool naming**: Use snake_case (`write_todos`, `read_file`) for consistency
+6. **Model instances**: Library requires AI SDK `LanguageModel` instances (not strings)
+   - CLI uses `parseModelString()` for backward compatibility only
+   - Programmatic usage: Always pass provider instances (`anthropic()`, `openai()`, etc.)
 
-## Common Patterns
+## Quick Reference
 
-### Creating an agent with custom backend
+**Need architecture details?** → See `docs/architecture.md`
 
-```typescript
-import { anthropic } from '@ai-sdk/anthropic';
-import { createDeepAgent, FilesystemBackend } from 'ai-sdk-deep-agent';
+**Need code examples?** → See `docs/patterns.md`
 
-const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  backend: new FilesystemBackend({ rootDir: './workspace' }),
-});
-```
+**Need checkpointer info?** → See `docs/checkpointers.md`
 
-### Using different providers
+**Need publishing help?** → See `.github/PUBLISHING.md`
 
-```typescript
-import { openai } from '@ai-sdk/openai';
-import { azure } from '@ai-sdk/azure';
-import { createDeepAgent } from 'ai-sdk-deep-agent';
+**Need feature tracking?** → See `.agent/PROJECT-STATE.md`
 
-// OpenAI
-const openaiAgent = createDeepAgent({
-  model: openai('gpt-4o', {
-    apiKey: process.env.OPENAI_API_KEY,
-  }),
-});
-
-// Azure OpenAI
-const azureAgent = createDeepAgent({
-  model: azure('gpt-4', {
-    apiKey: process.env.AZURE_API_KEY,
-    resourceName: 'my-resource',
-  }),
-});
-```
-
-### Multi-turn conversation
-
-```typescript
-let messages: ModelMessage[] = [];
-
-for await (const event of agent.streamWithEvents({ prompt: "First message", messages })) {
-  if (event.type === 'done') {
-    messages = event.messages || [];
-  }
-}
-
-// Next turn with context
-for await (const event of agent.streamWithEvents({ prompt: "Follow up", messages })) {
-  // Agent remembers previous context
-}
-```
-
-### Adding custom subagents
-
-```typescript
-import { anthropic } from '@ai-sdk/anthropic';
-import { createDeepAgent, type SubAgent } from 'ai-sdk-deep-agent';
-
-const researchAgent: SubAgent = {
-  name: 'research-agent',
-  description: 'Specialized for deep research tasks',
-  systemPrompt: 'You are a research specialist...',
-  tools: { custom_tool: myTool },
-  model: anthropic('claude-haiku-4-5-20251001'), // optional override with different model
-};
-
-const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  subagents: [researchAgent],
-});
-```
-
-### Checkpointer Support (Session Persistence)
-
-Enable conversation persistence and pause/resume functionality with checkpointers:
-
-```typescript
-import { anthropic } from '@ai-sdk/anthropic';
-import { createDeepAgent, MemorySaver, FileSaver, KeyValueStoreSaver, InMemoryStore } from 'ai-sdk-deep-agent';
-
-// Option 1: In-memory (for testing, single session)
-const agent1 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  checkpointer: new MemorySaver(),
-});
-
-// Option 2: File-based (for local development)
-const agent2 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  checkpointer: new FileSaver({ dir: './.checkpoints' }),
-});
-
-// Option 3: KeyValueStore adapter (for production with Redis, DB, etc.)
-const store = new InMemoryStore(); // Replace with RedisStore, DatabaseStore, etc.
-const agent3 = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  checkpointer: new KeyValueStoreSaver({ store, namespace: 'my-app' }),
-});
-
-// Usage with threadId to enable checkpointing
-const threadId = 'user-session-123';
-
-// First interaction - checkpoint is automatically saved
-for await (const event of agent.streamWithEvents({
-  prompt: "Create a project plan",
-  threadId,
-})) {
-  if (event.type === 'checkpoint-saved') {
-    console.log(`Checkpoint saved at step ${event.step}`);
-  }
-}
-
-// Later: Resume same thread - checkpoint is automatically loaded
-for await (const event of agent.streamWithEvents({
-  prompt: "Now implement the first task",
-  threadId, // Same threadId loads the checkpoint
-})) {
-  if (event.type === 'checkpoint-loaded') {
-    console.log(`Loaded ${event.messagesCount} messages from checkpoint`);
-  }
-  // Agent has full context from previous interaction
-}
-```
-
-**Built-in Checkpoint Savers:**
-
-- **`MemorySaver`**: In-memory storage (ephemeral, lost on process exit)
-  - Use for: Testing, single-session applications
-  - Features: Fast, simple, namespace support
-
-- **`FileSaver`**: JSON file storage (persists to disk)
-  - Use for: Local development, simple persistence needs
-  - Features: Human-readable, easy debugging, survives restarts
-
-- **`KeyValueStoreSaver`**: Adapter for `KeyValueStore` interface
-  - Use for: Production deployments with Redis, databases, cloud storage
-  - Features: Scalable, distributed, custom storage backends
-
-**Resume from Interrupts:**
-
-When using Human-in-the-Loop (HITL) tool approval, you can resume from interrupts:
-
-```typescript
-const agent = createDeepAgent({
-  model: anthropic('claude-sonnet-4-20250514'),
-  checkpointer: new FileSaver({ dir: './.checkpoints' }),
-  interruptOn: {
-    write_file: true, // Require approval for file writes
-  },
-});
-
-let pendingApproval: any = null;
-
-// First invocation - will interrupt on file write
-for await (const event of agent.streamWithEvents({
-  prompt: "Write a config file",
-  threadId: 'session-123',
-  onApprovalRequest: async (request) => {
-    pendingApproval = request;
-    return false; // Deny for now
-  },
-})) {
-  // Checkpoint is saved with interrupt data
-}
-
-// Later: Resume with approval decision
-for await (const event of agent.streamWithEvents({
-  threadId: 'session-123',
-  resume: {
-    decisions: [{ type: 'approve', toolCallId: pendingApproval.toolCallId }],
-  },
-  onApprovalRequest: async () => true, // Approve this time
-})) {
-  // Agent continues from where it left off
-}
-```
-
-**Custom Checkpoint Saver:**
-
-Implement `BaseCheckpointSaver` interface for custom storage:
-
-```typescript
-import type { BaseCheckpointSaver, Checkpoint } from 'ai-sdk-deep-agent';
-
-class RedisCheckpointSaver implements BaseCheckpointSaver {
-  constructor(private redis: RedisClient) {}
-  
-  async save(checkpoint: Checkpoint): Promise<void> {
-    await this.redis.set(
-      `checkpoint:${checkpoint.threadId}`,
-      JSON.stringify(checkpoint)
-    );
-  }
-  
-  async load(threadId: string): Promise<Checkpoint | undefined> {
-    const data = await this.redis.get(`checkpoint:${threadId}`);
-    return data ? JSON.parse(data) : undefined;
-  }
-  
-  async list(): Promise<string[]> {
-    const keys = await this.redis.keys('checkpoint:*');
-    return keys.map(k => k.replace('checkpoint:', ''));
-  }
-  
-  async delete(threadId: string): Promise<void> {
-    await this.redis.del(`checkpoint:${threadId}`);
-  }
-  
-  async exists(threadId: string): Promise<boolean> {
-    return await this.redis.exists(`checkpoint:${threadId}`) === 1;
-  }
-}
-```
-
-**CLI Session Management:**
-
-The CLI supports session persistence via the `--session` flag:
-
-```bash
-# Start CLI with session
-$ bun run cli --session my-project
-
-# Session is auto-saved after each response
-# Session is auto-restored on restart
-
-# List all sessions
-> /sessions
-
-# Clear current session
-> /session clear
-```
-
-**Key Features:**
-
-- ✅ Automatic checkpoint saving after each step
-- ✅ Thread isolation - different threads don't interfere
-- ✅ State preservation (todos, files, messages)
-- ✅ Pluggable storage backends
-- ✅ Namespace support for multi-tenancy
-
-**Known Limitations:**
-
-- ⚠️ **HITL Resume from Interrupts**: The `resume` option and `InterruptData` are defined but not fully implemented. Tools requiring approval cannot currently be paused and resumed across sessions. This feature is planned for a future release.
-- ⚠️ **Approval Events**: `ApprovalRequestedEvent` and `ApprovalResponseEvent` types exist but are not emitted by the agent's event stream. The CLI emits these as UI-level events. Track approvals via the `onApprovalRequest` callback instead.
-- ℹ️ **Auto-Deny Behavior**: Tools configured with `interruptOn` but no `onApprovalRequest` callback will be automatically denied (not executed).
-
-**See also:** `examples/checkpointer-demo.ts` for comprehensive examples
+**Need implementation process?** → See `PLAYBOOK.md`
