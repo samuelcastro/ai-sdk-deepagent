@@ -85,11 +85,12 @@ jobs:
           elif echo "$COMMIT_MESSAGES" | grep -qiE '(feat:|feature:|minor:)'; then
             BUMP_TYPE="minor"
             echo "Found feature - will bump minor version"
-          elif echo "$COMMIT_MESSAGES" | grep -qiE '(chore:|fix:|refactor:|test:)'; then
+          elif echo "$COMMIT_MESSAGES" | grep -qiE '(fix:|refactor:|test:)'; then
             # If there are any non-version-bump commits, do patch
             BUMP_TYPE="patch"
             echo "Found changes - will bump patch version"
           else
+            # chore, docs, etc. do not bump version
             echo "No changes since last version/tag – will not bump version"
             BUMP_TYPE=""
           fi
