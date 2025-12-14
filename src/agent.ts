@@ -7,9 +7,11 @@ import {
   stepCountIs,
   generateText,
   streamText,
+  wrapLanguageModel,
   type ToolSet,
   type StopCondition,
   type LanguageModel,
+  type LanguageModelMiddleware,
 } from "ai";
 import type {
   CreateDeepAgentParams,
@@ -31,6 +33,7 @@ import {
   FILESYSTEM_SYSTEM_PROMPT,
   TASK_SYSTEM_PROMPT,
   EXECUTE_SYSTEM_PROMPT,
+  buildSkillsPrompt,
 } from "./prompts.ts";
 import { createTodosTool } from "./tools/todos.ts";
 import { createFilesystemTools } from "./tools/filesystem.ts";
@@ -48,7 +51,8 @@ import type { SummarizationConfig } from "./types.ts";
 function buildSystemPrompt(
   customPrompt?: string,
   hasSubagents?: boolean,
-  hasSandbox?: boolean
+  hasSandbox?: boolean,
+  skills?: Array<{ name: string; description: string; path: string }>
 ): string {
   const parts = [
     customPrompt || "",
@@ -63,6 +67,11 @@ function buildSystemPrompt(
 
   if (hasSubagents) {
     parts.push(TASK_SYSTEM_PROMPT);
+  }
+
+  // Add skills prompt if skills loaded
+  if (skills && skills.length > 0) {
+    parts.push(buildSkillsPrompt(skills));
   }
 
   return parts.filter(Boolean).join("\n\n");
@@ -90,10 +99,12 @@ export class DeepAgent {
   private hasSandboxBackend: boolean;
   private interruptOn?: InterruptOnConfig;
   private checkpointer?: BaseCheckpointSaver;
+  private skillsMetadata: Array<{ name: string; description: string; path: string }> = [];
 
   constructor(params: CreateDeepAgentParams) {
     const {
       model,
+      middleware,
       tools = {},
       systemPrompt,
       subagents = [],
@@ -105,9 +116,22 @@ export class DeepAgent {
       summarization,
       interruptOn,
       checkpointer,
+      skillsDir,
     } = params;
 
-    this.model = model;
+    // Wrap model with middleware if provided
+    if (middleware) {
+      const middlewares = Array.isArray(middleware)
+        ? middleware
+        : [middleware];
+
+      this.model = wrapLanguageModel({
+        model: model as any, // Cast required since wrapLanguageModel expects LanguageModelV3
+        middleware: middlewares,
+      }) as LanguageModel;
+    } else {
+      this.model = model;
+    }
     this.maxSteps = maxSteps;
     this.backend =
       backend || ((state: DeepAgentState) => new StateBackend(state));
@@ -117,6 +141,13 @@ export class DeepAgent {
     this.interruptOn = interruptOn;
     this.checkpointer = checkpointer;
 
+    // Load skills if directory provided
+    if (skillsDir) {
+      this.loadSkills(skillsDir).catch(error => {
+        console.warn('[DeepAgent] Failed to load skills:', error);
+      });
+    }
+
     // Check if backend is a sandbox (supports execute)
     // For factory functions, we can't know until runtime, so we check if it's an instance
     this.hasSandboxBackend = typeof backend !== "function" && backend !== undefined && isSandboxBackend(backend);
@@ -125,7 +156,7 @@ export class DeepAgent {
     const hasSubagents =
       includeGeneralPurposeAgent || (subagents && subagents.length > 0);
 
-    this.systemPrompt = buildSystemPrompt(systemPrompt, hasSubagents, this.hasSandboxBackend);
+    this.systemPrompt = buildSystemPrompt(systemPrompt, hasSubagents, this.hasSandboxBackend, this.skillsMetadata);
 
     // Store user-provided tools
     this.userTools = tools;
@@ -207,6 +238,23 @@ export class DeepAgent {
       tools,
       stopWhen: stepCountIs(maxSteps ?? this.maxSteps),
     });
+  }
+
+  /**
+   * Load skills from directory asynchronously.
+   */
+  private async loadSkills(skillsDir: string) {
+    const { listSkills } = await import("./skills/load.ts");
+
+    const skills = await listSkills({
+      projectSkillsDir: skillsDir,
+    });
+
+    this.skillsMetadata = skills.map(s => ({
+      name: s.name,
+      description: s.description,
+      path: s.path,
+    }));
   }
 
   /**
@@ -669,6 +717,49 @@ export class DeepAgent {
  *     new StateBackend(state),
  *     { '/persistent/': new FilesystemBackend({ rootDir: './persistent' }) }
  *   ), // Route files by path prefix
+ * });
+ * ```
+ *
+ * @example With middleware for logging and caching
+ * ```typescript
+ * import { createDeepAgent } from 'ai-sdk-deep-agent';
+ * import { anthropic } from '@ai-sdk/anthropic';
+ *
+ * const loggingMiddleware = {
+ *   wrapGenerate: async ({ doGenerate, params }) => {
+ *     console.log('Model called with:', params.prompt);
+ *     const result = await doGenerate();
+ *     console.log('Model returned:', result.text);
+ *     return result;
+ *   },
+ * };
+ *
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   middleware: [loggingMiddleware],
+ * });
+ * ```
+ *
+ * @example With middleware factory for context access
+ * ```typescript
+ * import { FilesystemBackend } from 'ai-sdk-deep-agent';
+ *
+ * function createContextMiddleware(backend: BackendProtocol) {
+ *   return {
+ *     wrapGenerate: async ({ doGenerate }) => {
+ *       const state = await backend.read('state');
+ *       const result = await doGenerate();
+ *       await backend.write('state', { ...state, lastCall: result });
+ *       return result;
+ *     },
+ *   };
+ * }
+ *
+ * const backend = new FilesystemBackend({ rootDir: './workspace' });
+ * const agent = createDeepAgent({
+ *   model: anthropic('claude-sonnet-4-20250514'),
+ *   backend,
+ *   middleware: createContextMiddleware(backend),
  * });
  * ```
  *

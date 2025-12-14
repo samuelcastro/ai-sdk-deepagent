@@ -61,3 +61,4 @@ Temporary Items
 *.icloud
 
 .claude/.ralph/claude_output.jsonl
+.playwright-mcp

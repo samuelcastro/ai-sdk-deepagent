@@ -36,10 +36,10 @@ IMPORTANT: OPTIMIZE the user's research question request using your prompt-engin
    - Use the **codebase-locator** agent to find WHERE files and components live
    - Use the **codebase-analyzer** agent to understand HOW specific code works (without critiquing it)
    - Use the **codebase-pattern-finder** agent to find examples of existing patterns (without evaluating them)
-   - Output directory: `docs/tickets/{ticket-name}/` OR `docs/` if not associated with a ticket
+   - Output directory: `docs/tickets/{ticket-name}/` OR `docs/research/` if not associated with a ticket
    - Examples:
-     - For a research not associated with a ticket: `docs/2024-01-10-database-implementation.md`
-     - For a research associated with ticket AI-1234 and specific research: `docs/tickets/AI-1234/database-implementation.md` or `docs/tickets/AI-1234/authentication-flow.md`
+     - For a research not associated with a ticket: `docs/research/2024-01-10-research-topic.md`
+     - For a research associated with ticket AI-1234 and specific research: `docs/tickets/AI-1234/research.md`
      - Tickets can have multiple research documents under their folder
 
    **IMPORTANT**: All agents are documentarians, not critics. They will describe what exists without suggesting improvements or identifying issues.

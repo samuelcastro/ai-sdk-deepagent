@@ -165,3 +165,32 @@ Use for:
 
 4. **Working Directory**: Commands run in the sandbox's working directory`;
 
+/**
+ * Build skills section for system prompt with progressive disclosure.
+ */
+export function buildSkillsPrompt(skills: Array<{ name: string; description: string; path: string }>): string {
+  if (skills.length === 0) {
+    return '';
+  }
+
+  const skillsList = skills
+    .map(skill => `- **${skill.name}**: ${skill.description}\n  → Read \`${skill.path}\` for full instructions`)
+    .join('\n');
+
+  return `## Skills System
+
+You have access to a skills library providing specialized domain knowledge and workflows.
+
+**Available Skills:**
+
+${skillsList}
+
+**How to Use Skills (Progressive Disclosure):**
+
+1. **Recognize when a skill applies**: Check if the user's task matches any skill's domain
+2. **Read the skill's full instructions**: Use read_file to load the SKILL.md content
+3. **Follow the skill's workflow**: Skills contain step-by-step instructions and examples
+4. **Access supporting files**: Skills may include helper scripts or configuration files in their directory
+
+Skills provide expert knowledge for specialized tasks. Always read the full skill before using it.`;
+}

@@ -2,7 +2,7 @@
  * Shared type definitions for AI SDK Deep Agent.
  */
 
-import type { ToolSet, ModelMessage, LanguageModel } from "ai";
+import type { ToolSet, ModelMessage, LanguageModel, LanguageModelMiddleware } from "ai";
 import type { BaseCheckpointSaver, ResumeOptions } from "./checkpointer/types.ts";
 
 // Re-export for convenience
@@ -252,19 +252,35 @@ export type InterruptOnConfig = Record<string, boolean | DynamicApprovalConfig>;
  * @see {@link createDeepAgent} for usage examples and detailed documentation.
  */
 export interface CreateDeepAgentParams {
-  /** 
+  /**
    * **Required.** The AI SDK LanguageModel instance to use.
-   * 
+   *
    * Examples:
    * - `anthropic('claude-sonnet-4-20250514')` - Anthropic Claude
    * - `openai('gpt-4o')` - OpenAI GPT-4
    * - `azure('gpt-4', { apiKey, resourceName })` - Azure OpenAI
-   * 
+   *
    * @see {@link LanguageModel} from '@ai-sdk/core' for more details
    */
   model: LanguageModel;
-  
-  /** 
+
+  /**
+   * Optional middleware to wrap the model for logging, caching, RAG, guardrails, etc.
+   * Uses AI SDK's wrapLanguageModel under the hood.
+   *
+   * @example Single middleware
+   * ```typescript
+   * middleware: loggingMiddleware
+   * ```
+   *
+   * @example Multiple middlewares (applied in order: first transforms input, last wraps model)
+   * ```typescript
+   * middleware: [loggingMiddleware, cachingMiddleware, ragMiddleware]
+   * ```
+   */
+  middleware?: LanguageModelMiddleware | LanguageModelMiddleware[];
+
+  /**
    * Optional custom tools the agent should have access to.
    * 
    * These tools are available alongside built-in tools (todos, filesystem, subagents).
@@ -394,7 +410,7 @@ export interface CreateDeepAgentParams {
    * @example
    * ```typescript
    * import { MemorySaver } from 'ai-sdk-deep-agent';
-   * 
+   *
    * const agent = createDeepAgent({
    *   model: anthropic('claude-sonnet-4-20250514'),
    *   checkpointer: new MemorySaver(),
@@ -402,6 +418,22 @@ export interface CreateDeepAgentParams {
    * ```
    */
   checkpointer?: BaseCheckpointSaver;
+
+  /**
+   * Optional directory to load skills from.
+   * Skills are SKILL.md files with YAML frontmatter in subdirectories.
+   *
+   * User-level: ~/.deepagents/skills/
+   * Project-level: ./.deepagents/skills/
+   *
+   * Project skills override user skills with the same name.
+   *
+   * @example
+   * ```typescript
+   * skillsDir: './skills'
+   * ```
+   */
+  skillsDir?: string;
 }
 
 /**

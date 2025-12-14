@@ -34,16 +34,38 @@ _No critical features pending_
 
 ### High Priority
 
-- [ ] **StoreBackend** - LangGraph BaseStore adapter for cross-thread persistence
-- [ ] **Async Backend Methods** - Full async variants of all backend operations
-- [ ] **Middleware Architecture** - Composable wrapModel/wrapToolCall hooks
+- [ ] **Middleware Architecture** 🎯 **[TOP PRIORITY]** - Composable `wrapModel`/`wrapToolCall`/`transformMessages` hooks
+  - **Why**: Foundational for production use (logging, monitoring, retry logic, custom behaviors)
+  - **Impact**: Unlocks Agent Memory, Skills System, and custom tool behaviors
+  - **Effort**: 2-3 days (non-breaking, add `middleware: AgentMiddleware[]` param)
+  - **Reference**: See `.refs/deepagentsjs/src/middleware/` for LangChain's pattern
+
+- [ ] **Web Tools** - `web_search` (Tavily), `http_request`, `fetch_url`
+  - **Why**: High user value, enables research agents and web integrations
+  - **Impact**: Immediately expands agent capabilities
+  - **Effort**: 1-2 days (straightforward tool implementations)
+
+- [ ] **Async Backend Methods** ⚠️ **[BREAKING]** - Full async variants of all backend operations
+  - **Why**: Current sync methods block event loop, limits scalability
+  - **Impact**: Better performance for I/O-heavy operations
+  - **Effort**: 2-3 days, requires refactoring all backends + tests
+  - **Note**: Schedule for next major version (v0.2.0 or v1.0.0)
 
 ### Medium Priority
 
-- [ ] **Cloud Sandbox Integrations** - Modal, Runloop, Daytona providers
 - [ ] **Skills System** - Load pluggable capabilities from SKILL.md files
+  - **Depends on**: Middleware Architecture (for custom tool injection)
+  - **Impact**: Enables modular agents, community contributions, agent marketplaces
+
 - [ ] **Agent Memory Middleware** - Long-term memory from agent.md files
-- [ ] **Web Tools** - `web_search` (Tavily), `http_request`, `fetch_url`
+  - **Depends on**: Middleware Architecture
+  - **Impact**: Persistent agent personalities and context
+
+- [ ] **StoreBackend** - LangGraph BaseStore adapter for cross-thread persistence
+  - **Note**: Lower priority since PersistentBackend already handles similar use cases
+
+- [ ] **Cloud Sandbox Integrations** - Modal, Runloop, Daytona providers
+  - **Note**: Wait for user demand before implementing
 
 ### Lower Priority
 
@@ -71,3 +93,25 @@ _No critical features pending_
 - Reference JS implementation: `.refs/deepagentsjs/`
 - Reference Python implementation: `.refs/deepagents/`
 - AI SDK v6 primitive: `ToolLoopAgent` from `ai` package
+
+## Priority Rationale (Updated 2025-12-15)
+
+**Why Middleware Architecture First?**
+
+1. **Force Multiplier**: Unlocks Skills System and Agent Memory as middleware plugins
+2. **Production-Ready**: Essential for logging, monitoring, retry logic in enterprise deployments
+3. **Non-Breaking**: Can be added alongside existing API without disrupting users
+4. **Reference Alignment**: Matches LangChain's DeepAgents architecture pattern
+
+**Implementation Sequence:**
+
+1. Middleware Architecture (2-3 days) → Foundation for extensibility
+2. Web Tools (1-2 days) → Quick user value win
+3. Skills System (2-3 days) → Builds on middleware, enables community contributions
+4. Async Backend Methods (2-3 days, breaking) → Save for v0.2.0/v1.0.0
+
+**Deferred Features:**
+
+- **StoreBackend**: PersistentBackend already handles cross-conversation memory adequately
+- **Cloud Sandboxes**: Low demand, implement when users request specific providers
+- **Structured Output**: Nice-to-have, can be middleware later

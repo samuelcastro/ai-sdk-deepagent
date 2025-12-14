@@ -123,3 +123,11 @@ export {
 
 // Checkpointer
 export * from "./checkpointer/index.ts";
+
+// Re-export AI SDK middleware types for user convenience
+export type { LanguageModelMiddleware } from 'ai';
+export { wrapLanguageModel } from 'ai';
+
+// Skills System
+export { listSkills, parseSkillMetadata } from "./skills/index.ts";
+export type { SkillMetadata, SkillLoadOptions } from "./skills/index.ts";
