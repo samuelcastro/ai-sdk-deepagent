@@ -232,10 +232,41 @@ Identify which functions already exist (from step 2) and which need to be create
 
 ## Deliverables
 
-When you complete this command, provide:
+When you complete this command, you must:
 
-1. **Test case definitions in comments** - All test scenarios written in the structured comment format
-2. **List of required DSL functions** - Organized by category (setup/action/assertion), noting which exist and which need creation
-3. **Pattern alignment notes** - How the test cases follow existing patterns discovered in step 2
+1. **Create `test-cases.md` file** - Save all test case definitions to `docs/tickets/TICKET-NAME/test-cases.md`:
+   - All test scenarios written in the structured comment format
+   - List of required DSL functions organized by category (setup/action/assertion)
+   - Notes on which DSL functions already exist and which need creation
+   - Pattern alignment notes explaining how test cases follow existing patterns
 
-Remember: The goal is to make tests read like specifications. Focus on clearly defining WHAT needs to be tested, following existing project patterns.
+2. **File Structure** - The `test-cases.md` file should contain:
+   ```markdown
+   # Test Cases: [Feature Name]
+   
+   ## Test Case Definitions
+   
+   [All test cases in structured comment format]
+   
+   ## Required DSL Functions
+   
+   ### Setup Functions
+   - [Existing] functionName - [description]
+   - [New] functionName - [description]
+   
+   ### Action Functions
+   - [Existing] functionName - [description]
+   - [New] functionName - [description]
+   
+   ### Assertion Functions
+   - [Existing] functionName - [description]
+   - [New] functionName - [description]
+   
+   ## Pattern Alignment
+   
+   [Notes on how these follow existing test patterns]
+   ```
+
+3. **Determine Ticket Name** - If not provided, infer from context or ask the user for the ticket folder name
+
+Remember: The goal is to make tests read like specifications. Focus on clearly defining WHAT needs to be tested, following existing project patterns. The `test-cases.md` file will be used by step 4 (implementation) and step 5 (validation).

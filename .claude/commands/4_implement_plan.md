@@ -14,6 +14,7 @@ You are tasked with implementing an approved technical plan from `docs/tickets/T
 When given a plan path:
 
 - Read the plan completely and check for any existing checkmarks (- [x])
+- **Read `test-cases.md`** - If `docs/tickets/TICKET-NAME/test-cases.md` exists, read it to understand test requirements
 - Read all files mentioned in the plan
 - **Read files fully** - never use limit/offset parameters
 - Create a todo list to track your progress
@@ -46,6 +47,7 @@ How should I proceed?
 After implementing a phase:
 
 - Run the success criteria checks
+- **If `test-cases.md` exists**: Run tests to verify test cases pass
 - Fix any issues before proceeding
 - Update your progress in both the plan and your todos
 - Check off completed items in the plan file using Edit
@@ -57,17 +59,23 @@ After implementing a phase:
    - Run all automated checks for that phase
    - Update plan checkboxes as you go
 
-2. **When You Get Stuck**:
+2. **Test-Driven Implementation** (if `test-cases.md` exists):
+   - **Implement DSL functions** - Create any missing DSL functions identified in `test-cases.md`
+   - **Implement test cases** - Write actual test implementations based on test case definitions
+   - **Run tests frequently** - Ensure tests pass as you implement features
+   - **Follow DSL patterns** - Use existing DSL functions where available, create new ones following established patterns
+
+3. **When You Get Stuck**:
    - First, ensure you've read and understood all relevant code
    - Consider if the codebase has evolved since plan was written
    - Present the mismatch clearly and ask for guidance
 
-3. **Progress Tracking**:
+4. **Progress Tracking**:
    - Use TodoWrite to track implementation tasks
    - Update plan file with [x] checkmarks as you complete items
    - Keep user informed of progress
 
-4. **Documenting New Requirements and Requests**:
+5. **Documenting New Requirements and Requests**:
    - When the user requests new features, changes, or clarifications during implementation:
      - Create a note file in the ticket folder: `docs/tickets/TICKET-NAME/notes-YYYY-MM-DD.md`
      - Use descriptive filenames if multiple notes per day: `docs/tickets/TICKET-NAME/notes-YYYY-MM-DD-{topic}.md`
@@ -116,12 +124,13 @@ If the plan has existing checkmarks:
 When working on a ticket, maintain documentation in `docs/tickets/TICKET-NAME/`:
 
 - `plan.md` - The implementation plan (updated with checkboxes as you progress)
+- `test-cases.md` - Test case definitions and DSL function requirements (created by `/3_define_test_cases`)
 - `research.md` - Research findings (if applicable)
 - `notes-YYYY-MM-DD.md` - Implementation notes, new requirements, and decisions
 - `sessions/` - Session summaries (created by `/7_save_progress`)
 - `validation-report*.md` - Validation reports (created by `/5_validate_implementation`)
 
-All files in the ticket folder should be considered part of the implementation context.
+All files in the ticket folder should be considered part of the implementation context. **If `test-cases.md` exists, you must implement both the feature AND the test cases/DSL functions defined within it.**
 
 ## Post-Implementation Workflow
 
